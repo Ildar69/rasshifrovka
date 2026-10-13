@@ -1,0 +1,177 @@
+ru:
+  app_header: Транскрибация аудио с помощью искусственного интеллекта
+  welcome_message: Привет! noScribe готов к работе!
+  welcome_credits: >
+    
+    Версия %{v}, Kai Dröge %{y}
+    
+    портирована на macOS компанией Philipp Schneider
+    
+    Работает на базе Whisper (OpenAI), faster-whisper (Guillaume Klein) и pyannote (Hervé Bredin)
+  welcome_instructions: >
+
+    Используйте кнопки слева для выбора аудиофайла и имени файла для готовой транскрипции.
+    Пожалуйста, будьте терпеливы. Транскрибация может занять в 2-5 раз больше времени, чем длительность аудиофайла. Проверьте настройки
+    на коротком фрагменте перед транскрибацией полного аудио. (Начало = 00.00.00 и Окончание = 00.03.00 будут
+    транскрибировать первые 3 минуты.)   
+
+
+    Приятной работы!
+
+  setup_message: 'Первый запуск: Завершите настройку...'
+  new_release: 'Доступна новая версия noScribe (%{v}):'
+  new_release_download: 'Загрузить: '
+
+  # Элементы пользовательского интерфейса
+  tab_log: Журнал
+  tab_queue: Очередь
+  label_audio_file: 'Аудиофайл:'
+  label_audio_file_name: <выберите файл>
+  multiple_audio_files: '(выбрано несколько файлов)'
+  
+  label_transcript_file: 'Сохранить транскрипцию как:'
+  label_transcript_file_name: <выберите имя файла> 
+  output_dir_selection: 'Несколько аудиофайлов: выберите папку, в которой будут сохранены расшифровки. Имена будут сгенерированы автоматически.'
+  output_format_selection: 'Несколько аудиофайлов: выберите формат вывода для всех транскрипций.'
+
+  label_start: 'Начало (чч:мм:сс): '
+  label_stop: 'Окончание (чч:мм:сс): ' 
+
+  label_language: 'Язык:'
+  label_speaker: 'Определение диктора:'
+  label_speaker_names: 'Имена:'
+  tooltip_speaker_names: |-
+    Имена людей в аудио через запятую (например, "Mona, Lena").
+    Они назначаются дикторам в порядке первого появления
+    и заменяют метки S00/S01 в транскрипте.
+  ask_speaker_names_count: 'Введено имён: %{n_names}, но число говорящих задано как %{n_speakers}. Имена могут быть присвоены не тем людям. Всё равно начать?'
+  warn_speaker_names_more_speakers: 'Обнаружено больше говорящих, чем введено имён (%{n_names}). Остальные говорящие вместо этого нумеруются вслед за названными по имени, в порядке появления.'
+  label_whisper_model: 'Модель:'
+  label_add_custom_models: 'Добавить модель искусственного интеллекта...'  
+  label_overlapping: 'Перекрытие речи:'
+  label_pause: 'Отметьте паузы:'
+  label_timestamps: 'Временные метки:'
+  label_disfluencies: 'Паразитные слова:'
+  opt_yes: 'Да'
+  opt_no: 'Нет'
+  
+  start_button: Старт
+  start_queue: 'Запустить задание сейчас'
+  stop_button: Отмена
+  editor_button: Редактор
+ 
+  overall_progress: 'Общий прогресс: '
+
+  # Статус задания
+  waiting: 'ожидание'
+  audio_conversion: 'преобразование аудио'
+  speaker_identification: 'определение дикторов'
+  transcription: 'транскрибация'
+  canceling: 'отмена выполняется'
+  canceled: 'отменено'
+  finished: 'завершено'
+  error: 'ошибка'
+
+  # Подсказки очереди заданий
+  job_tt_waiting: 'Задача ожидает...'
+  job_tt_running: 'Задача выполняется. Подробности смотрите во вкладке журнала.'
+  job_tt_finished: 'Готово. Нажмите «✔» справа, чтобы посмотреть результат.'
+  job_tt_transcript_file: 'Транскрипция:'
+  job_tt_canceling: 'Отмена выполняется...'
+  job_tt_canceled: 'Задание отменено пользователем.'
+  job_tt_error: 'Во время обработки задачи произошла ошибка: %{error_msg}'
+
+  # Сообщения журнала
+  log_transcript_filename: 'Имя файла(ов) транскрипции: '
+  log_audio_file_selected: 'Выбран(ы) аудиофайл(ы): '
+  queue_added_job: 'Задание «%{audio_file}» добавлено в очередь.'
+  queue_start: '=== Запуск очереди ==='
+  queue_start_jobs: 'Обработка %{total} задания(ий) на транскрипцию'
+  queue_none_waiting: 'Нечего выполнять: в очереди нет ожидающих заданий.'
+  start_job: 'Запуск задания: %{audio_file}'
+  start_audio_conversion: 'Преобразование аудио...'
+  audio_conversion_finished: 'Преобразование аудио завершено'
+  audio_conversion_skipped_invalid_packets: 'Пропущено недопустимых аудиопакетов: %{count}.'
+  start_identifying_speakers: 'Определение дикторов...'
+  loading_pyannote: 'Загрузка pyannote'
+  start_canceling: 'Отмена... (пожалуйста, подождите)'
+  start_transcription: 'Транскрибация...'
+  loading_whisper: 'Загрузка whisper'
+  pyannote_cuda_retry: 'Обнаружена ошибка CUDA в PyAnnote. Повторяю на CPU.'
+  whisper_cuda_retry: 'Обнаружена ошибка CUDA в Whisper. Повторяю на CPU.'
+  vad: 'Обнаружение голосовой активности...'
+  language_detect: 'Обнаружен язык «%{lang}» с вероятностью %{prob}'
+  language_en_only: 'Обратите внимание: выбранная для транскрибации модель ИИ поддерживает только английский язык.'
+  transcription_finished: 'Транскрибация завершена.'
+  transcription_saved: 'Сохранено в %{file}'
+  trancription_time: 'Продолжительность: %{duration} минут'
+  queue_complete: '=== Обработка очереди завершена ==='
+  total_jobs: 'Всего заданий: %{total}'
+  completed: 'Завершено: %{finished}'
+  failed: 'Неудачных: %{errors}'
+  canceled_summary: 'Отменено: %{canceled}'
+  processing_time: 'Общее время обработки: %{total_time_str}'
+
+  # Сообщения об ошибках
+  err_setup: 'Произошла ошибка при настройке. Проверьте подключение к интернету и перезапустите программу.'
+  output_override: >
+    Другое задание в очереди (ожидает, выполняется или завершено) использует тот же выходной файл.
+    Перезаписать этот выходной файл?
+  err_invalid_time_string: 'Неверное время: "%{time}"'
+  err_options: 'Ошибка в настройках'
+  err_unsupported_output_format: 'Ошибка: Формат вывода "%{file_type}" не поддерживается.'
+  err_no_audio_file: 'Ошибка: Пожалуйста, выберите аудиофайл.'
+  err_no_transcript_file: 'Ошибка: Пожалуйста, выберите имя файла для готовой транскрипции.'
+  err_ffmpeg: 'ffmpeg вернул ошибку'
+  err_converting_audio: Ошибка на шаге 1 - преобразование аудио.
+  err_identifying_speakers: Ошибка на шаге 2 - определение дикторов.
+  err_loading_prompt: 'Предупреждение: не удалось загрузить промпт Whisper.'
+  transcription_canceled: 'Вы действительно хотите отменить транскрипцию?'   
+  queue_cancel_all_confirm: 'Это отменит все незавершённые задания в очереди. Продолжить?'
+  err_user_cancelation: 'Процесс был отменен пользователем.'
+  err_whisper_main: 'Ошибка в Whisper: завершение основной программы с кодом %{e}'
+  err_transcription: 'Ошибка на шаге 3 - транскрипция'
+  err_empty_transcript: 'В выбранном диапазоне текст не распознан. Проверьте аудио и настройки транскрипции.'
+  rescue_saving: 'Не удалось сохранить в оригинальный файл. Сохранено в файл: %{file}'
+  rescue_saving_failed: 'Ошибка: Не удалось сохранить в оригинальный файл. Файл с альтернативным именем также существует. Приложение будет закрыто. (Убедитесь, что ваша транскрипция не открыта в Word!)'
+  pyannote_cuda_error_prompt: |-
+    Диаризация PyAnnote завершилась ошибкой CUDA:
+
+    %{error}
+
+    Переключиться на обработку на CPU и повторить попытку?
+  whisper_cuda_error_prompt: |-
+    Транскрипция Whisper завершилась ошибкой CUDA:
+
+    %{error}
+
+    Переключиться на обработку на CPU и повторить попытку?
+  err_noScribeEdit_not_found: 'Ошибка: не удалось найти редактор noScribe.'
+  err_vtt_invalid_options: 'Предупреждение: параметры "Перекрытие речи", "Отметьте паузы" и "Временные метки" не поддерживаются в файлах VTT.'
+  err_editor_invalid_format: 'Редактор может использоваться только с HTML-файлами. Запустить его все равно?'
+  err_editor_no_file: 'Нет доступных завершённых заданий транскрипции. Запустить редактор всё равно?'
+  err_invalid_model: 'Игнорируется повторяющееся имя модели whisper: "%{model_name}"'
+  err_partial_not_found: 'Файл частичной транскрипции не найден.'
+  log_open_partial: 'Открытие частичной транскрипции: %{file}'
+
+  # Содержимое документа
+  doc_header: 'Транскрибировано с помощью noScribe версии %{version}'
+  doc_header_audio: 'Аудиофайл: %{file}'
+  pause_minutes: '(%{minutes} минуты паузы)'
+  pause_seconds: '(%{seconds} секунд паузы)'
+  
+  # Действия с очередью
+  queue_remove_waiting: 'Удалить это задание из очереди?'
+  queue_remove_entry: 'Удалить эту запись из списка?'
+  queue_clear_tt: 'Удалить из списка все задания, кроме выполняемого'
+  queue_clear_confirm: 'Удалить из списка все задания, кроме выполняемого? Выполняемое задание продолжит работу.'
+  queue_tt_cancel_running: 'Отменить это задание'
+  queue_tt_remove_waiting: 'Удалить из очереди'
+  queue_tt_remove_entry: 'Удалить из списка'
+  queue_tt_repeat_job: 'Повторить это задание'
+  queue_tt_edit_job: 'Открыть результат в редакторе noScribe'
+  queue_tt_open_partial_job: 'Открыть частичный результат в редакторе noScribe'
+
+  # Дополнительные кнопки UI
+  send_queue: 'Отправить задание в очередь'
+  queue_run_button: 'Запустить'

@@ -1,0 +1,177 @@
+pt:
+  app_header: Transcrição de Áudio com IA
+  welcome_message: Olá, o noScribe está pronto!
+  welcome_credits: >
+    
+    Versão %{v}, Kai Dröge %{y}
+    
+    adaptado para macOS por Philipp Schneider
+    
+    Desenvolvido por Whisper (OpenAI), faster-whisper (Guillaume Klein) e pyannote (Hervé Bredin)
+  welcome_instructions: >
+
+    Use os botões à esquerda para selecionar um arquivo de áudio e um nome de arquivo para sua transcrição concluída.
+    Por favor, tenha paciência. A transcrição pode levar de 2 a 5 vezes mais tempo que o arquivo de áudio. Teste suas configurações
+    com uma seção mais curta antes de transcrever o áudio completo. (Início = 00.00.00 e Parar = 00.03.00 irão
+    transcrever os primeiros 3 minutos.)   
+
+
+    Aproveite!
+
+  setup_message: 'Primeira execução: Complete a configuração...'
+  new_release: 'Uma nova versão do noScribe está disponível (%{v}):'
+  new_release_download: 'Download: '
+
+  # Elementos da interface
+  tab_log: Registro
+  tab_queue: Fila
+  label_audio_file: 'Arquivo de áudio:'
+  label_audio_file_name: <selecionar arquivo>
+  multiple_audio_files: '(vários arquivos selecionados)'
+  
+  label_transcript_file: 'Salvar transcrição como:'
+  label_transcript_file_name: <selecionar nome de arquivo> 
+  output_dir_selection: 'Vários arquivos de áudio: selecione um diretório onde as transcrições serão salvas. Os nomes serão gerados automaticamente.'
+  output_format_selection: 'Vários arquivos de áudio: selecione o formato de saída para todas as transcrições.'
+
+  label_start: 'Início (hh:mm:ss): '
+  label_stop: 'Parar (hh:mm:ss): ' 
+
+  label_language: 'Idioma:'
+  label_speaker: 'Detecção de alto-falante:'
+  label_speaker_names: 'Nomes:'
+  tooltip_speaker_names: |-
+    Nomes das pessoas no áudio, separados por vírgulas (p. ex. "Mona, Lena").
+    São atribuídos aos falantes pela ordem da primeira aparição
+    e substituem as etiquetas S00/S01 na transcrição.
+  ask_speaker_names_count: 'Introduziu %{n_names} nome(s), mas o número de oradores está definido como %{n_speakers}. Os nomes podem ser atribuídos às pessoas erradas. Iniciar mesmo assim?'
+  warn_speaker_names_more_speakers: 'Foram detetados mais oradores do que os nomes inseridos (%{n_names}). Os oradores excedentes são numerados em vez disso, a seguir aos nomeados e por ordem de aparecimento.'
+  label_whisper_model: 'Modelo:'
+  label_add_custom_models: 'Adicionar modelo de IA...'  
+  label_overlapping: 'Sobreposição:'
+  label_pause: 'Marcar pausas:'
+  label_timestamps: 'Registos temporais:'
+  label_disfluencies: 'Disfluências:'
+  opt_yes: 'Sim'
+  opt_no: 'Não'
+  
+  start_button: Iniciar
+  start_queue: 'Iniciar tarefa agora'
+  stop_button: Cancelar
+  editor_button: Editor
+
+  overall_progress: 'Progresso geral: '
+
+  # Status do trabalho
+  waiting: 'aguardando'
+  audio_conversion: 'conversão de áudio'
+  speaker_identification: 'identificação de locutores'
+  transcription: 'transcrição'
+  canceling: 'cancelando'
+  canceled: 'cancelado'
+  finished: 'concluído'
+  error: 'erro'
+
+  # Dicas da fila de trabalhos
+  job_tt_waiting: 'Tarefa aguardando...'
+  job_tt_running: 'Tarefa em execução. Veja a aba de registro para detalhes.'
+  job_tt_finished: 'Concluído. Clique em "✔" à direita para ver o resultado.'
+  job_tt_transcript_file: 'Transcrição:'
+  job_tt_canceling: 'Cancelando...'
+  job_tt_canceled: 'Tarefa cancelada pelo usuário.'
+  job_tt_error: 'Ocorreu um erro durante o processamento: %{error_msg}'
+
+  # Mensagens de log
+  log_transcript_filename: 'Nome(s) do arquivo de transcrição: '
+  log_audio_file_selected: 'Arquivo(s) de áudio selecionado(s): '
+  queue_added_job: 'Tarefa "%{audio_file}" adicionada à fila.'
+  queue_start: '=== Iniciando fila ==='
+  queue_start_jobs: 'Processando %{total} tarefa(s) de transcrição'
+  queue_none_waiting: 'Nada a fazer, a fila não contém tarefas em espera.'
+  start_job: 'Iniciando tarefa: %{audio_file}'
+  start_audio_conversion: 'Convertendo áudio...'
+  audio_conversion_finished: 'Conversão de áudio concluída'
+  audio_conversion_skipped_invalid_packets: '%{count} pacotes de áudio inválidos foram ignorados.'
+  start_identifying_speakers: 'Identificação de alto-falantes...'
+  loading_pyannote: 'Carregando pyannote'
+  start_canceling: 'Cancelando... (aguarde um segundo)'
+  start_transcription: 'Transcrição...'
+  loading_whisper: 'Carregando whisper'
+  pyannote_cuda_retry: 'Erro CUDA do PyAnnote detectado. Tentando novamente na CPU.'
+  whisper_cuda_retry: 'Erro CUDA do Whisper detectado. Tentando novamente na CPU.'
+  vad: 'Detecção de atividade de voz...'
+  language_detect: 'Idioma detectado "%{lang}" com probabilidade %{prob}'
+  language_en_only: 'Tenha em atenção que o modelo de IA selecionado para a transcrição é apenas em inglês.'
+  transcription_finished: 'Transcrição concluída.'
+  transcription_saved: 'Salvo em %{file}'
+  trancription_time: 'Duração: %{duration} minutos'
+  queue_complete: '=== Processamento da fila concluído ==='
+  total_jobs: 'Total de tarefas: %{total}'
+  completed: 'Concluídas: %{finished}'
+  failed: 'Falhas: %{errors}'
+  canceled_summary: 'Canceladas: %{canceled}'
+  processing_time: 'Tempo total de processamento: %{total_time_str}'
+
+  # Mensagens de erro
+  err_setup: 'Ocorreu um erro durante a configuração. Verifique se você possui uma conexão de internet funcionando e reinicie o programa.'
+  output_override: >
+    Outra tarefa na fila (aguardando, em execução ou concluída) usa o mesmo arquivo de saída.
+    Deseja substituir o arquivo de saída?
+  err_invalid_time_string: 'Este não é um horário válido: "%{time}"'
+  err_options: 'Erro nas opções'
+  err_unsupported_output_format: 'Erro: O formato de saída "%{file_type}" não é suportado.'
+  err_no_audio_file: 'Erro: Por favor, selecione um arquivo de áudio.'
+  err_no_transcript_file: 'Erro: Por favor, escolha um nome de arquivo para a transcrição concluída.'
+  err_ffmpeg: 'ffmpeg retornou um erro'
+  err_converting_audio: Erro na etapa 1 - convertendo o áudio.
+  err_identifying_speakers: Erro na etapa 2 - identificando os alto-falantes.
+  err_loading_prompt: 'Aviso: não foi possível carregar o prompt do Whisper.'
+  transcription_canceled: 'Você realmente deseja cancelar a transcrição?'   
+  queue_cancel_all_confirm: 'Isto cancelará todas as tarefas não concluídas na fila. Deseja continuar?'
+  err_user_cancelation: 'O processo foi cancelado pelo usuário.'
+  err_whisper_main: Whisper terminou com o código de erro %{e}
+  err_transcription: 'Erro na etapa 3 - transcrição'
+  err_empty_transcript: 'Não foi reconhecido texto no intervalo selecionado. Verifique o áudio e as definições de transcrição.'
+  rescue_saving: 'Falha ao salvar com o nome de arquivo original. Salvo em vez disso neste arquivo: %{file}'
+  rescue_saving_failed: 'Erro: Falha ao salvar com o nome de arquivo original. O nome alternativo também existe. Preciso sair. (Certifique-se de que sua transcrição não esteja aberta no Word!)'
+  pyannote_cuda_error_prompt: |-
+    A diarização do PyAnnote falhou com um erro CUDA:
+
+    %{error}
+
+    Alternar para processamento na CPU e tentar novamente?
+  whisper_cuda_error_prompt: |-
+    A transcrição do Whisper falhou com um erro CUDA:
+
+    %{error}
+
+    Alternar para processamento na CPU e tentar novamente?
+  err_noScribeEdit_not_found: 'Erro: não foi possível encontrar o editor do noScribe.'
+  err_vtt_invalid_options: 'Aviso: as opções "Sobreposição", "Marcar pausas" e "Registos temporais" não são suportadas em arquivos VTT.'
+  err_editor_invalid_format: 'O editor só pode ser usado com arquivos HTML. Deseja iniciá-lo mesmo assim?'
+  err_editor_no_file: 'Nenhuma tarefa de transcrição concluída disponível. Iniciar o editor mesmo assim?'
+  err_invalid_model: 'Nome duplicado ignorado para o modelo whisper: "%{model_name}"'
+  err_partial_not_found: 'Arquivo de transcrição parcial não encontrado.'
+  log_open_partial: 'Abrindo transcrição parcial: %{file}'
+
+  # Conteúdo do documento
+  doc_header: 'Transcrito com noScribe versão %{version}'
+  doc_header_audio: 'Arquivo de áudio: %{file}'
+  pause_minutes: '(%{minutes} minuto[s] pausa)'
+  pause_seconds: '(%{seconds} segundos de pausa)'
+  
+  # Ações da fila
+  queue_remove_waiting: 'Remover esta tarefa da fila?'
+  queue_remove_entry: 'Remover esta entrada da lista?'
+  queue_clear_tt: 'Remover da lista todas as tarefas exceto a que está em execução'
+  queue_clear_confirm: 'Remover da lista todas as tarefas exceto a que está em execução? A tarefa em execução continua a ser processada.'
+  queue_tt_cancel_running: 'Cancelar esta tarefa'
+  queue_tt_remove_waiting: 'Remover da fila'
+  queue_tt_remove_entry: 'Remover da lista'
+  queue_tt_repeat_job: 'Repetir esta tarefa'
+  queue_tt_edit_job: 'Abrir o resultado no editor noScribe'
+  queue_tt_open_partial_job: 'Abrir resultado parcial no editor noScribe'
+
+  # Botões adicionais da UI
+  send_queue: 'Enviar tarefa para a fila'
+  queue_run_button: 'Executar'

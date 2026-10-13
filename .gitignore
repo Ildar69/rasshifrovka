@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+engine/models/*/model.bin
+engine/models/*/config.json
+engine/models/*/preprocessor_config.json
+engine/models/*/tokenizer.json
+engine/models/*/vocabulary.json
+build/
+dist/
+*.log

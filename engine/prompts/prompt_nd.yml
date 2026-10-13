@@ -1,0 +1,62 @@
+# Initial prompt for the whisper model, depending on language
+# see: https://platform.openai.com/docs/guides/speech-to-text/prompting
+# This is the version WITHOUT DISFLUENCIES
+# Do NOT put quotation marks (") inside your prompt!
+
+en: It is not so easy.
+de: Das ist nicht so einfach.
+af: Dit is nie so maklik nie.
+ar: هذا ليس سهلا جدا.
+hy: Դա այնքան էլ հեշտ չէ.
+az: Bu o qədər də asan deyil.
+be: Гэта не так проста.
+bs: To nije tako lako.
+bg: Това не е толкова лесно.
+ca: No és tan fàcil.
+zh: 这并不那么容易.
+hr: Nije tako lako.
+cs: Není to tak snadné.
+da: Det er ikke så let.
+nl: Het is niet zo makkelijk.
+et: See ei ole nii lihtne.
+fi: Se ei ole niin helppoa.
+fr: Ce n’est pas si facile.
+gl: Non é tan doado.
+el: Δεν είναι τόσο εύκολο.
+he: זה לא כל כך פשוט.
+hi: यह इतना आसान नहीं है।
+hu: Ez nem olyan egyszerű.
+is: Það er ekki svo auðvelt.
+id: Itu tidak begitu mudah.
+it: Non è così facile.
+ja: それはそんなに簡単ではありません。
+kn: ಅದು ಅಷ್ಟು ಸುಲಭವಲ್ಲ.
+kk: Бұл онша оңай емес.
+ko: 그것은 그렇게 쉽지 않습니다.
+lv: Tas nav tik viegli.
+lt: Tai nėra taip paprasta.
+mk: Тоа не е толку лесно.
+ms: Ia tidak begitu mudah.
+mr: ते इतके सोपे नाही.
+mi: Ehore kore rawa i te ngawari.
+ne: यो त्यति सजिलो छैन।
+no: Det er ikke så lett.
+fa: این آنقدرها هم آسان نیست.
+pl: To nie jest takie proste.
+pt: Não é tão fácil.
+ro: Nu este chiar atât de ușor.
+ru: Это не так уж просто.
+sr: То није тако лако.
+sk: Nie je to také ľahké.
+sl: Ni tako enostavno.
+es: No es tan fácil.
+sw: Si rahisi hivyo.
+sv: Det är inte så lätt.
+tl: Hindi ganoon kadali.
+ta: அது அவ்வளவு எளிதல்ல.
+th: มันไม่ง่ายขนาดนั้น.
+tr: O kadar da kolay değil.
+uk: Це не так просто.
+ur: یہ اتنا آسان نہیں ہے۔
+vi: Nó không dễ như vậy.
+cy: Nid yw mor hawdd â hynny.

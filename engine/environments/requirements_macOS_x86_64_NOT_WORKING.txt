@@ -1,0 +1,19 @@
+# Install with `pip install -r requirements_macOS_x86_64.txt`
+# torch==2.8 # pyannote 4 is currently not compatible with torch 2.9; torch version is set by torchaudio
+torchaudio==2.8
+torchcodec==0.7.0
+av<19  # faster-whisper 1.2.1 passes metadata_errors to av.open(), which PyAV 19 removed
+AdvancedHTMLParser
+appdirs
+customtkinter
+CTkToolTip
+faster-whisper
+importlib-resources>=5.10; python_version < "3.12"
+Pillow
+pyannote.audio>=4
+pyinstaller
+pyobjc
+python-i18n
+PyYAML
+soundfile
+numpy<2

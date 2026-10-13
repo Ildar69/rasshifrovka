@@ -1,0 +1,23 @@
+# Версии проверены вместе 13.10.2026 на Windows 11, Python 3.12, без видеокарты.
+# torch и torchaudio ставит install.ps1 из CPU-индекса PyTorch.
+faster-whisper==1.2.1
+ctranslate2==4.5.0
+onnxruntime==1.20.1
+pyannote.audio==4.0.7
+numpy==2.5.4
+scipy==1.18.1
+av==12.3.0
+soundfile==0.14.0
+SoundCard==0.4.6
+PyQt6==6.11.0
+PyQt6-WebEngine==6.11.0
+QtAwesome==1.4.2
+customtkinter==6.0.0
+CTkToolTip==0.9
+AdvancedHTMLParser==9.0.2
+appdirs==1.4.4
+python-i18n==0.3.9
+PyYAML==6.0.3
+pillow==12.3.0
+matplotlib==3.11.2
+huggingface_hub

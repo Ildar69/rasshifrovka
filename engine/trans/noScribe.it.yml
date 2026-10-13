@@ -1,0 +1,176 @@
+it:
+  app_header: Trascrizione audio potenziata da AI
+  welcome_message: Ciao! noScribe è pronto!
+  welcome_credits: >
+    
+    Versione %{v}, Kai Dröge %{y}
+    
+    portato su macOS da Philipp Schneider
+    
+    Potenziato da Whisper (OpenAI), faster-whisper (Guillaume Klein) e pyannote (Hervé Bredin)
+  welcome_instructions: >
+
+    Usa i pulsanti a sinistra per selezionare un file audio e un nome di file per la tua trascrizione finale.
+    Sii paziente. La trascrizione potrebbe richiedere da 2 a 5 volte più tempo rispetto al file audio. Prova le impostazioni 
+    con una sezione più breve prima di trascrivere l'audio completo. (Inizio = 00.00.00 e Fine = 00.03.00 trascriveranno i primi 3 minuti.)   
+
+
+    Buon divertimento!
+
+  setup_message: 'Prima esecuzione: Completa la configurazione...'
+  new_release: 'È disponibile una nuova versione di noScribe (%{v}):'
+  new_release_download: 'Scarica: '
+
+  # Elementi dell'interfaccia utente
+  tab_log: Registro
+  tab_queue: Coda
+  label_audio_file: 'File audio:'
+  label_audio_file_name: <seleziona file>
+  multiple_audio_files: '(più file selezionati)'
+  
+  label_transcript_file: 'Salva trascrizione come:'
+  label_transcript_file_name: <seleziona nome file> 
+  output_dir_selection: 'Più file audio: seleziona una cartella in cui salvare le trascrizioni. I nomi verranno generati automaticamente.'
+  output_format_selection: 'Più file audio: selezionare il formato di output per tutte le trascrizioni.'
+
+  label_start: 'Inizio (hh:mm:ss): '
+  label_stop: 'Fine (hh:mm:ss): ' 
+
+  label_language: 'Lingua:'
+  label_speaker: 'Rilevamento degli speaker:'
+  label_speaker_names: 'Nomi:'
+  tooltip_speaker_names: |-
+    Nomi delle persone nell'audio, separati da virgole (es. "Mona, Lena").
+    Vengono assegnati agli speaker nell'ordine di prima apparizione
+    e sostituiscono le etichette S00/S01 nella trascrizione.
+  ask_speaker_names_count: 'Hai inserito %{n_names} nome/i, ma il numero di oratori è impostato su %{n_speakers}. I nomi potrebbero essere assegnati alle persone sbagliate. Avviare comunque?'
+  warn_speaker_names_more_speakers: 'Sono stati rilevati più oratori dei nomi inseriti (%{n_names}). Gli oratori in eccesso vengono invece numerati, di seguito a quelli con nome e in ordine di apparizione.'
+  label_whisper_model: 'Modello:'
+  label_add_custom_models: 'Aggiungi modello AI...'
+  label_overlapping: 'Discorso sovrapposto:'
+  label_pause: 'Segna le pause:'
+  label_timestamps: 'Timestamps:'
+  label_disfluencies: 'Disfluenze:'
+  opt_yes: 'Sì'
+  opt_no: 'No'
+  
+  start_button: Avvia
+  start_queue: 'Avvia attività ora'
+  stop_button: Annulla
+  editor_button: Editor
+  
+  overall_progress: 'Progresso totale: '
+
+  # Stato del lavoro
+  waiting: 'in attesa'
+  audio_conversion: 'conversione audio'
+  speaker_identification: 'identificazione parlanti'
+  transcription: 'trascrizione'
+  canceling: 'annullamento in corso'
+  canceled: 'annullato'
+  finished: 'completato'
+  error: 'errore'
+
+  # Suggerimenti della coda di lavori
+  job_tt_waiting: 'Processo in attesa...'
+  job_tt_running: 'Processo in esecuzione. Vedi la scheda registro per i dettagli.'
+  job_tt_finished: 'Completato. Clicca su "✔" a destra per vedere il risultato.'
+  job_tt_transcript_file: 'Trascrizione:'
+  job_tt_canceling: 'Annullamento in corso...'
+  job_tt_canceled: 'Attività annullata dall’utente.'
+  job_tt_error: "Si è verificato un errore durante l'elaborazione: %{error_msg}"
+
+  # Messaggi di log
+  log_transcript_filename: 'Nome/i file della trascrizione: '
+  log_audio_file_selected: 'File audio selezionato/i: '
+  queue_added_job: 'Attività "%{audio_file}" aggiunta alla coda.'
+  queue_start: '=== Avvio della coda ==='
+  queue_start_jobs: 'Elaborazione di %{total} attività di trascrizione'
+  queue_none_waiting: 'Nulla da fare, la coda non contiene attività in attesa.'
+  start_job: 'Avvio attività: %{audio_file}'
+  start_audio_conversion: 'Conversione audio in corso...'
+  audio_conversion_finished: 'Conversione audio completata'
+  audio_conversion_skipped_invalid_packets: 'Sono stati ignorati %{count} pacchetti audio non validi.'
+  start_identifying_speakers: 'Identificazione degli speaker in corso...'
+  loading_pyannote: 'Caricamento di pyannote'
+  start_canceling: 'Annullamento in corso... (attendere un secondo)'
+  start_transcription: 'Trascrizione in corso...'
+  loading_whisper: 'Caricamento di whisper'
+  pyannote_cuda_retry: 'Rilevato errore CUDA di PyAnnote. Riprovo sulla CPU.'
+  whisper_cuda_retry: 'Rilevato errore CUDA di Whisper. Riprovo sulla CPU.'
+  vad: "Rilevamento dell'attività vocale..."
+  language_detect: 'Lingua rilevata "%{lang}" con probabilità %{prob}'
+  language_en_only: 'Tieni presente che il modello di IA scelto per la trascrizione è solo in inglese.'
+  transcription_finished: 'Trascrizione completata.'
+  transcription_saved: 'Salvato in %{file}'
+  trancription_time: 'Durata: %{duration} minuti'
+  queue_complete: '=== Elaborazione della coda completata ==='
+  total_jobs: 'Attività totali: %{total}'
+  completed: 'Completate: %{finished}'
+  failed: 'Fallite: %{errors}'
+  canceled_summary: 'Annullate: %{canceled}'
+  processing_time: 'Tempo totale di elaborazione: %{total_time_str}'
+
+  # Messaggi di errore
+  err_setup: 'Si è verificato un errore durante la configurazione. Controlla la tua connessione internet e riavvia il programma.'
+  output_override: >
+    Un’altra attività nella coda (in attesa, in esecuzione o completata) utilizza lo stesso file di output.
+    Vuoi sovrascrivere il file di output?
+  err_invalid_time_string: 'Questa non è una stringa di tempo valida: "%{time}"'
+  err_options: 'Errore nelle opzioni'
+  err_unsupported_output_format: 'Errore: Il formato di output "%{file_type}" non è supportato.'
+  err_no_audio_file: 'Errore: seleziona un file audio.'
+  err_no_transcript_file: 'Errore: scegli un nome per la trascrizione finale.'
+  err_ffmpeg: 'ffmpeg ha restituito un errore'
+  err_converting_audio: 'Errore nella fase 1 - conversione audio.'
+  err_identifying_speakers: 'Errore nella fase 2 - identificazione degli speaker.'
+  err_loading_prompt: 'Avviso: impossibile caricare il prompt di Whisper.'
+  transcription_canceled: 'Vuoi davvero annullare la trascrizione?'   
+  queue_cancel_all_confirm: 'Questo annullerà tutte le attività non completate nella coda. Vuoi continuare?'
+  err_user_cancelation: 'Processo annullato dall utente.'
+  err_whisper_main: 'Whisper terminato con il codice di errore %{e}'
+  err_transcription: 'Errore nella fase 3 - trascrizione'
+  err_empty_transcript: 'Non è stato riconosciuto alcun testo nell’intervallo selezionato. Controlla l’audio e le impostazioni di trascrizione.'
+  rescue_saving: 'Salvataggio con il nome originale non riuscito. Salvato invece in questo file: %{file}'
+  rescue_saving_failed: 'Errore: salvataggio con il nome originale non riuscito. Il nome alternativo esiste già. Il programma deve essere chiuso. (Assicurati che la trascrizione non sia già aperta in Word!)'
+  pyannote_cuda_error_prompt: |-
+    La diarizzazione PyAnnote è fallita con un errore CUDA:
+
+    %{error}
+
+    Passare all'elaborazione su CPU e riprovare?
+  whisper_cuda_error_prompt: |-
+    La trascrizione Whisper è fallita con un errore CUDA:
+
+    %{error}
+
+    Passare all'elaborazione su CPU e riprovare?
+  err_noScribeEdit_not_found: "Errore: impossibile trovare l'editor di noScribe."
+  err_vtt_invalid_options: 'Avviso: le opzioni "Discorso sovrapposto", "Segna le pause" e "Timestamps" non sono supportate nei file VTT.'
+  err_editor_invalid_format: "L'editor può essere utilizzato solo con file HTML. Vuoi avviarlo comunque?"
+  err_editor_no_file: 'Nessuna attività di trascrizione completata disponibile. Avviare comunque l’editor?'
+  err_invalid_model: 'Nome duplicato ignorato per il modello whisper: "%{model_name}"'
+  err_partial_not_found: "File di trascrizione parziale non trovato."
+  log_open_partial: "Apertura trascrizione parziale: %{file}"
+
+  # Contenuti del documento
+  doc_header: 'Trascritto con noScribe vers. %{version}'
+  doc_header_audio: 'File audio: %{file}'
+  pause_minutes: '(%{minutes} minuti pausa)'
+  pause_seconds: '(%{seconds} secondi di pausa)'
+  
+  # Azioni coda
+  queue_remove_waiting: 'Rimuovere questa attività dalla coda?'
+  queue_remove_entry: 'Rimuovere questa voce dall’elenco?'
+  queue_clear_tt: 'Rimuovere dall''elenco tutti i lavori tranne quello in corso'
+  queue_clear_confirm: 'Rimuovere dall''elenco tutti i lavori tranne quello in corso? Il lavoro in corso continua l''esecuzione.'
+  queue_tt_cancel_running: 'Annulla questa attività'
+  queue_tt_remove_waiting: 'Rimuovi dalla coda'
+  queue_tt_remove_entry: 'Rimuovi dall’elenco'
+  queue_tt_repeat_job: 'Ripeti questa attività'
+  queue_tt_edit_job: 'Apri il risultato nell’editor di noScribe'
+  queue_tt_open_partial_job: "Apri il risultato parziale nell'editor di noScribe"
+
+  # Pulsanti UI aggiuntivi
+  send_queue: 'Invia attività alla coda'
+  queue_run_button: 'Esegui'

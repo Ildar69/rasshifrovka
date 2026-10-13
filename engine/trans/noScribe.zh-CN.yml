@@ -1,0 +1,180 @@
+zh-CN: &defaults
+  app_header: 基于AI的音频转录
+  welcome_message: 你好，noScribe已准备就绪！
+  welcome_credits: >
+
+    版本号：%{v}，Kai Dröge %{y}
+    
+    由 Philipp Schneider 移植到 macOS
+    
+    由Whisper（OpenAI）、faster-whisper（Guillaume Klein）和pyannote（Hervé Bredin）驱动
+  welcome_instructions: >
+
+    请使用左侧的按钮选择音频文件和完成转录的文件名。
+    请耐心等待。转录可能需要比音频文件长2至5倍的时间。在转录完整音频之前，请使用较短的部分测试您的设置。
+    （开始 = 00:00:00，结束 = 00:03:00将转录前3分钟。）
+
+
+    祝您使用愉快！
+
+  setup_message: '首次运行：完成设置...'
+  new_release: 'noScribe的新版本 (%{v})现已发布：'
+  new_release_download: '下载：'
+
+  # 用户界面元素
+  tab_log: 日志
+  tab_queue: 队列
+  label_audio_file: '音频文件：'
+  label_audio_file_name: <选择文件>
+  multiple_audio_files: '（已选择多个文件）'
+  
+  label_transcript_file: '保存转录文件为：'
+  label_transcript_file_name: <选择文件名> 
+  output_dir_selection: '多个音频文件：请选择一个目录保存转录结果。文件名将自动生成。'
+  output_format_selection: '多个音频文件：请选择所有转录的输出格式。'
+
+  label_start: '开始（hh:mm:ss）：'
+  label_stop: '结束（hh:mm:ss）：'
+
+  label_language: '语言：'
+  label_speaker: '说话人识别：'
+  label_speaker_names: '姓名：'
+  tooltip_speaker_names: |-
+    音频中人物的姓名，用逗号分隔（例如"Mona, Lena"）。
+    按首次出现的顺序分配给说话人，
+    并替换转录中的S00/S01标签。
+  ask_speaker_names_count: '您输入了 %{n_names} 个名字，但说话人数量设置为 %{n_speakers}。名字可能会分配给错误的人。仍要开始吗？'
+  warn_speaker_names_more_speakers: '检测到的说话人数量超过输入的名字数量（%{n_names}）。多余的说话人将改为编号，接在已命名的说话人之后，按出现顺序排列。'
+  label_whisper_model: '人工智能模型：'
+  label_add_custom_models: '添加人工智能模型...'  
+  label_overlapping: '重叠发言：'
+  label_pause: '标记停顿：'
+  label_timestamps: '时间戳：'
+  label_disfluencies: '语言停顿：'
+  opt_yes: '是'
+  opt_no: '否'
+  
+  start_button: 开始 
+  start_queue: '立即开始任务'
+  stop_button: 取消
+  editor_button: 编辑器
+
+  overall_progress: '总进度：'
+
+  # 任务状态
+  waiting: '等待中'
+  audio_conversion: '音频转换'
+  speaker_identification: '说话人识别'
+  transcription: '转录'
+  canceling: '正在取消'
+  canceled: '已取消'
+  finished: '完成'
+  error: '错误'
+
+  # 队列提示
+  job_tt_waiting: '任务等待中...'
+  job_tt_running: '任务运行中。详情请查看日志标签。'
+  job_tt_finished: '已完成。点击右侧“✔”查看结果。'
+  job_tt_transcript_file: '转录：'
+  job_tt_canceling: '正在取消...'
+  job_tt_canceled: '作业已被用户取消。'
+  job_tt_error: '处理任务时发生错误：%{error_msg}'
+
+  # 日志信息
+  log_transcript_filename: '转录文件名（可多个）：'
+  log_audio_file_selected: '已选择音频文件（可多个）：'
+  queue_added_job: '已将任务“%{audio_file}”添加到队列。'
+  queue_start: '=== 开始队列 ==='
+  queue_start_jobs: '正在处理 %{total} 个转录任务'
+  queue_none_waiting: '无需处理，队列中没有等待中的任务。'
+  start_job: '开始任务：%{audio_file}'
+  start_audio_conversion: '正在转换音频...'
+  audio_conversion_finished: '音频转换完成'
+  audio_conversion_skipped_invalid_packets: '已跳过 %{count} 个无效音频包。'
+  start_identifying_speakers: '正在识别说话人...'
+  loading_pyannote: '加载pyannote中'
+  start_canceling: '正在取消...（请稍候）'
+  start_transcription: '正在转录...'
+  loading_whisper: '正在加载whisper'
+  pyannote_cuda_retry: '检测到 PyAnnote 的 CUDA 错误。正在使用 CPU 重试。'
+  whisper_cuda_retry: '检测到 Whisper 的 CUDA 错误。正在使用 CPU 重试。'
+  vad: '语音活动检测...'
+  language_detect: '检测到语言“%{lang}”，概率 %{prob}'
+  language_en_only: '请注意，所选用于转写的 AI 模型仅支持英文。'
+
+  transcription_finished: '转录完成。'
+  transcription_saved: '已保存至 %{file}'
+  trancription_time: '时长：%{duration}分钟'
+  queue_complete: '=== 队列处理完成 ==='
+  total_jobs: '任务总数：%{total}'
+  completed: '已完成：%{finished}'
+  failed: '失败：%{errors}'
+  canceled_summary: '已取消：%{canceled}'
+  processing_time: '总处理时间：%{total_time_str}'
+
+  # 错误信息
+  output_override: >
+    队列中的另一个任务（等待中、运行中或已完成）使用了同一输出文件。
+    是否要覆盖该输出文件？
+  err_setup: '设置过程中发生错误。请检查您的网络连接并重新启动程序。'
+  err_invalid_time_string: '无效的时间格式：“%{time}”'
+  err_options: '选项错误'
+  err_unsupported_output_format: '错误：不支持输出格式 "%{file_type}"。'
+  err_no_audio_file: '错误：请选择音频文件。'
+  err_no_transcript_file: '错误：请选择完成的转录文件名。'
+  err_ffmpeg: 'ffmpeg返回了一个错误'
+  err_converting_audio: '步骤1中的音频转换错误。'
+  err_identifying_speakers: '步骤2中的说话人识别错误。'
+  err_loading_prompt: '警告：无法加载 Whisper 提示词。'
+  transcription_canceled: '是否确认取消转录？'   
+  queue_cancel_all_confirm: '这将取消队列中所有未完成的任务。是否继续？'
+  err_user_cancelation: '转录过程已被用户取消。'
+  err_whisper_main: 'Whisper主进程终止，错误代码：%{e}'
+  err_transcription: '步骤3中的转录错误。'
+  err_empty_transcript: '在所选范围内未识别到文本。请检查音频和转录设置。'
+  rescue_saving: '保存至原始文件名失败。已保存至此文件：%{file}'
+  rescue_saving_failed: '错误：保存至原始文件名失败。备用文件名已存在。程序将退出。（请确保转录文件未在Word中打开！）'
+  pyannote_cuda_error_prompt: |-
+    PyAnnote 说话人分离因 CUDA 错误失败：
+
+    %{error}
+
+    是否切换到 CPU 处理后重试？
+  whisper_cuda_error_prompt: |-
+    Whisper 转写因 CUDA 错误失败：
+
+    %{error}
+
+    是否切换到 CPU 处理后重试？
+  err_noScribeEdit_not_found: '错误：找不到noScribe编辑器。'
+  err_vtt_invalid_options: '警告：VTT文件不支持“重叠发言”、“标记停顿”和“时间戳”选项。'
+  err_editor_invalid_format: '编辑器只能用于html文件。你仍然要启动它吗？'
+  err_editor_no_file: '没有已完成的转录任务。仍要启动编辑器吗？'
+  err_invalid_model: '忽略了重复的 whisper 模型名称："%{model_name}"'
+  err_partial_not_found: '未找到部分转录文件。'
+  log_open_partial: '正在打开部分转录：%{file}'
+
+  # 文档内容
+  doc_header: '使用noScribe %{version} 版本转录'
+  doc_header_audio: '音频文件：%{file}'
+  pause_minutes: '(%{minutes} 分钟 暂停)'
+  pause_seconds: '(%{seconds} 秒暂停)'
+  
+  # 队列操作
+  queue_remove_waiting: '从队列中移除此任务？'
+  queue_remove_entry: '从列表中移除此条目？'
+  queue_clear_tt: '从列表中删除除正在运行的任务外的所有任务'
+  queue_clear_confirm: '要从列表中删除除正在运行的任务外的所有任务吗？正在运行的任务将继续执行。'
+  queue_tt_cancel_running: '取消此任务'
+  queue_tt_remove_waiting: '从队列中移除'
+  queue_tt_remove_entry: '从列表中移除'
+  queue_tt_repeat_job: '重复此任务'
+  queue_tt_edit_job: '在 noScribe 编辑器中打开结果'
+  queue_tt_open_partial_job: '在 noScribe 编辑器中打开部分结果'
+
+  # 其他 UI 按钮
+  send_queue: '发送任务到队列'
+  queue_run_button: '运行'
+
+zh:
+  <<: *defaults

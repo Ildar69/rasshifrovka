@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Расшифровка</title>
+<style>
+/* Layout: history on the left, one task at a time on the right; player docked at the bottom like a podcast app. */
+:root {
+  --bg: #F6F6F3; --surface: #FFFFFF; --surface2: #F0F0EB; --line: #E4E3DC; --fg: #1B1C19; --muted: #6A6B64;
+  --accent: #2756C7; --accent-fg: #FFFFFF; --accent-soft: #E7EDFB; --rec: #D3392B; --rec-soft: #FCE9E6;
+  --ok: #2E7D4F; --warn: #A3670F; --err: #B73226; --hl: #FFF4CC; --shadow: 0 1px 2px rgba(20,20,10,.06), 0 4px 16px rgba(20,20,10,.05);
+  --s0: #2756C7; --s1: #B2541B; --s2: #6E4BC2; --s3: #2E7D4F; --s4: #A3306C; --s5: #7A6812;
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #141518; --surface: #1C1D21; --surface2: #25272C; --line: #30323A; --fg: #ECEDEF; --muted: #9B9EA6;
+  --accent: #7FA2FF; --accent-fg: #0E1220; --accent-soft: #222C47; --rec: #FF6A5C; --rec-soft: #3A201D;
+  --ok: #63C68E; --warn: #E6A84D; --err: #FF8378; --hl: #3A3420; --shadow: 0 1px 2px rgba(0,0,0,.4);
+  --s0: #7FA2FF; --s1: #F2A06B; --s2: #BBA4F7; --s3: #79D6A0; --s4: #F28CC1; --s5: #E2D06C;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.45 var(--font); display: flex; overflow: hidden; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1, h2 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+.muted { color: var(--muted); }
+.num { font-variant-numeric: tabular-nums; }
+
+/* sidebar */
+aside { width: 300px; flex: none; background: var(--surface); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.brand { padding: 20px 20px 4px; }
+.brand h1 { font-size: 20px; font-weight: 650; }
+.brand .lock { font-size: 12px; color: var(--ok); margin-top: 2px; }
+.actions { display: grid; gap: 8px; padding: 14px 16px 10px; }
+.big { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); text-align: left; }
+.big:hover { background: var(--surface2); }
+.big b { display: block; font-weight: 600; }
+.big small { color: var(--muted); }
+.big .ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex: none; font-size: 16px; }
+.big.primary .ic { background: var(--accent); color: var(--accent-fg); }
+.big.rec .ic { background: var(--rec-soft); color: var(--rec); }
+.big[aria-current="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.search { margin: 6px 16px 6px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: inherit; }
+.hist-title { padding: 10px 20px 0; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.list { flex: 1; overflow-y: auto; padding: 4px 10px 16px; }
+.day { font-size: 12px; color: var(--muted); padding: 12px 10px 4px; }
+.row { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 9px 10px; border-radius: 10px; }
+.row:hover { background: var(--surface2); }
+.row[aria-current="true"] { background: var(--accent-soft); }
+.row .t { font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.row .m { font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; margin-top: 2px; }
+.pill { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 99px; }
+.pill.queued { background: var(--surface2); color: var(--muted); }
+.pill.running { background: var(--accent-soft); color: var(--accent); }
+.pill.error { background: var(--rec-soft); color: var(--err); }
+.mini { height: 3px; border-radius: 3px; background: var(--line); margin-top: 6px; overflow: hidden; }
+.mini i { display: block; height: 100%; background: var(--accent); }
+.empty-hist { padding: 16px 12px; color: var(--muted); }
+
+/* main */
+main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.page { flex: 1; overflow-y: auto; padding: 28px 40px 32px; }
+.wrap { max-width: 860px; margin: 0 auto; display: grid; gap: 20px; }
+.pagehead h2 { font-size: 26px; font-weight: 650; }
+.pagehead p { margin: 4px 0 0; color: var(--muted); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 14px; font-weight: 600; }
+.btn:hover { background: var(--surface2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.btn.primary:hover { filter: brightness(1.07); }
+.btn.danger { background: var(--rec); border-color: var(--rec); color: #fff; }
+.btn.quiet { border-color: transparent; background: transparent; color: var(--accent); padding: 6px 8px; }
+
+/* new */
+.drop { border: 2px dashed var(--line); border-radius: 16px; padding: 34px 20px; text-align: center; background: var(--surface); display: grid; gap: 10px; justify-items: center; transition: background .15s, border-color .15s; }
+.drop.hot { border-color: var(--accent); background: var(--accent-soft); }
+.drop .glyph { font-size: 28px; }
+.drop b { font-size: 16px; }
+.inbox { padding: 6px; }
+.inbox h3 { margin: 10px 12px 6px; font-size: 15px; }
+.inbox .hint { margin: 0 12px 8px; color: var(--muted); }
+.file { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; }
+.file:hover { background: var(--surface2); }
+.file .fi { width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex: none; }
+.file .fn { flex: 1; min-width: 0; }
+.file .fn b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.settings-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; }
+.settings { display: grid; gap: 16px; padding: 4px 16px 16px; }
+.settings label { font-weight: 600; display: block; margin-bottom: 6px; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; background: var(--surface2); padding: 4px; border-radius: 12px; }
+.seg button { border: 0; background: transparent; padding: 6px 12px; border-radius: 9px; }
+.seg button[aria-pressed="true"] { background: var(--surface); box-shadow: var(--shadow); font-weight: 600; }
+.seg + small { display: block; color: var(--muted); margin-top: 4px; }
+
+/* recorder */
+.recbox { padding: 28px; display: grid; gap: 18px; justify-items: center; text-align: center; }
+.timer { font-family: var(--font-display); font-size: 56px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.dot { width: 14px; height: 14px; border-radius: 50%; background: var(--muted); display: inline-block; margin-right: 10px; vertical-align: middle; }
+.recording .dot { background: var(--rec); animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .recording .dot { animation: none; } }
+.meter { width: 280px; max-width: 100%; height: 8px; border-radius: 8px; background: var(--surface2); overflow: hidden; }
+.meter i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .1s; }
+.recbtn { font-size: 16px; padding: 14px 28px; border-radius: 14px; }
+.live { padding: 18px 22px; min-height: 120px; text-align: left; }
+.live h3 { margin: 0 0 6px; font-size: 14px; }
+.live p { margin: 0 0 6px; }
+
+/* item */
+.titleline { display: flex; align-items: flex-start; gap: 12px; }
+.titleline h2 { flex: 1; font-size: 26px; font-weight: 650; border-radius: 8px; padding: 2px 6px; margin-left: -6px; outline: none; }
+.titleline h2:hover { background: var(--surface2); }
+.titleline h2:focus { background: var(--surface); box-shadow: 0 0 0 2px var(--accent); }
+.metaline { color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 0; }
+.metaline span + span::before { content: '·'; margin: 0 8px; }
+.toolbar { display: flex; gap: 8px; align-items: center; flex: none; position: relative; }
+.menu { position: absolute; right: 0; top: 44px; z-index: 5; min-width: 230px; padding: 6px; display: grid; }
+.menu button { border: 0; background: transparent; text-align: left; padding: 9px 12px; border-radius: 8px; }
+.menu button:hover { background: var(--surface2); }
+.menu button.del { color: var(--err); }
+.status { padding: 16px 18px; display: grid; gap: 10px; }
+.bar { height: 8px; border-radius: 8px; background: var(--surface2); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); transition: width .8s; }
+.speakers { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; }
+.chip i { width: 10px; height: 10px; border-radius: 50%; }
+.chip:hover { border-color: var(--accent); }
+.chip input { font: inherit; font-weight: 600; border: 0; background: transparent; color: var(--fg); width: 140px; outline: none; }
+.doc { padding: 6px 0; }
+.para { display: grid; grid-template-columns: 64px 1fr; gap: 14px; padding: 10px 18px; border-radius: 12px; cursor: pointer; }
+.para:hover { background: var(--surface2); }
+.para.cur { background: var(--hl); }
+.para .tm { color: var(--muted); font-size: 12px; text-align: right; padding-top: 3px; font-variant-numeric: tabular-nums; }
+.para .who { font-weight: 650; font-size: 13px; }
+.para .tx { font-size: 15.5px; line-height: 1.6; max-width: 68ch; user-select: text; }
+.para .tx mark { background: var(--accent-soft); color: inherit; }
+
+/* player */
+.player { flex: none; border-top: 1px solid var(--line); background: var(--surface); padding: 10px 24px; display: flex; align-items: center; gap: 12px; }
+.play { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-fg); font-size: 16px; flex: none; }
+.skip { border: 0; background: transparent; color: var(--muted); padding: 6px; border-radius: 8px; }
+.skip:hover { background: var(--surface2); color: var(--fg); }
+.scrub { flex: 1; accent-color: var(--accent); }
+.speed { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 4px 10px; font-weight: 600; min-width: 56px; }
+
+.toast { position: fixed; right: 24px; bottom: 84px; background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 12px; box-shadow: var(--shadow); opacity: 0; transform: translateY(8px); transition: .2s; pointer-events: none; }
+.toast.show { opacity: 1; transform: none; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<aside>
+  <div class="brand">
+    <h1>Расшифровка</h1>
+    <div class="lock">● Без интернета — всё остаётся на ноутбуке</div>
+  </div>
+  <div class="actions">
+    <button class="big primary" id="go-new"><span class="ic">＋</span><span><b>Расшифровать запись</b><small>голосовое или файл</small></span></button>
+    <button class="big rec" id="go-rec"><span class="ic">●</span><span><b>Записать разговор</b><small>встреча или созвон</small></span></button>
+  </div>
+  <input class="search" id="search" type="search" placeholder="Найти в истории">
+  <div class="hist-title">История</div>
+  <div class="list" id="list"></div>
+</aside>
+
+<main>
+  <!-- new -->
+  <section class="page" id="p-new" hidden>
+    <div class="wrap">
+      <div class="pagehead"><h2>Расшифровать запись</h2><p>Перетащите файл или выберите голосовое из Загрузок — текст появится в истории слева.</p></div>
+      <div class="drop" id="drop">
+        <div class="glyph">⇣</div>
+        <b>Перетащите аудио сюда</b>
+        <span class="muted">голосовое WhatsApp, запись встречи, mp3, m4a, ogg, wav</span>
+        <button class="btn primary" id="pick">Выбрать файл</button>
+      </div>
+      <div class="card">
+        <div class="settings-line" id="settings-line"></div>
+        <div class="settings" id="settings" hidden></div>
+      </div>
+      <div class="card inbox">
+        <h3>Голосовые в Загрузках</h3>
+        <p class="hint" id="inbox-hint"></p>
+        <div id="inbox"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- recorder -->
+  <section class="page" id="p-rec" hidden>
+    <div class="wrap">
+      <div class="pagehead"><h2>Записать разговор</h2><p>После остановки запись сразу уйдёт в расшифровку.</p></div>
+      <div class="card recbox" id="recbox">
+        <div class="seg" id="rec-source">
+          <button data-v="mic" aria-pressed="true">Встреча — микрофон</button>
+          <button data-v="both" aria-pressed="false">Созвон — микрофон и звук компьютера</button>
+        </div>
+        <div class="timer num"><span class="dot"></span><span id="rec-time">0:00</span></div>
+        <div class="meter" title="Громкость"><i id="rec-level"></i></div>
+        <button class="btn primary recbtn" id="rec-btn">Начать запись</button>
+        <small class="muted" id="rec-note">Запись сохраняется на диск каждые 30 секунд — даже если окно закроется или ноутбук выключится, записанное не пропадёт. Предупредите собеседников, что разговор записывается.</small>
+      </div>
+      <div class="card live" id="live" hidden>
+        <h3>Черновик по ходу записи</h3>
+        <p class="muted" id="live-note">Появляется кусками по 10 секунд. Итоговый текст после остановки будет точнее и с говорящими.</p>
+        <div id="live-text"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- item -->
+  <section class="page" id="p-item" hidden>
+    <div class="wrap">
+      <div class="titleline">
+        <h2 id="it-title" contenteditable="true" spellcheck="false" title="Нажмите, чтобы переименовать"></h2>
+        <div class="toolbar">
+          <button class="btn" id="it-copy">Копировать текст</button>
+          <button class="btn" id="it-more" aria-haspopup="true" title="Ещё">⋯</button>
+          <div class="card menu" id="it-menu" hidden>
+            <button id="m-edit">Исправить текст в редакторе</button>
+            <button id="m-folder">Открыть папку с файлами</button>
+            <button id="m-retry">Расшифровать заново</button>
+            <button id="m-del" class="del">Удалить из истории</button>
+          </div>
+        </div>
+      </div>
+      <div class="metaline num" id="it-meta"></div>
+      <div class="card status" id="it-status" hidden></div>
+      <div class="speakers" id="it-speakers"></div>
+      <div class="card doc" id="it-doc"></div>
+    </div>
+  </section>
+
+  <!-- empty -->
+  <section class="page" id="p-empty" hidden>
+    <div class="wrap"><div class="pagehead"><h2>Выберите запись в истории</h2><p>Или начните новую: «Расшифровать запись» или «Записать разговор».</p></div></div>
+  </section>
+
+  <div class="player" id="player" hidden>
+    <button class="play" id="pl-play" title="Пауза / продолжить (пробел)">▶</button>
+    <button class="skip" id="pl-back" title="Назад на 10 секунд">−10 с</button>
+    <button class="skip" id="pl-fwd" title="Вперёд на 10 секунд">+10 с</button>
+    <span class="num muted" id="pl-cur">0:00</span>
+    <input class="scrub" id="pl-scrub" type="range" min="0" max="1000" value="0" aria-label="Позиция">
+    <span class="num muted" id="pl-dur">0:00</span>
+    <button class="speed" id="pl-speed" title="Скорость">1×</button>
+    <audio id="audio" preload="metadata"></audio>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = s => { s = Math.max(0, Math.round(s || 0)); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60;
+  return h ? `${h}:${String(m).padStart(2,'0')}:${String(x).padStart(2,'0')}` : `${m}:${String(x).padStart(2,'0')}`; };
+let api, S = {items: [], downloads: [], settings: {}, options: {}}, view = 'new', curId = null, cur = null, paraEls = [], curPara = -1;
+
+function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 2600); }
+const call = (name, ...a) => new Promise(r => api[name](...a, v => r(v && v[0] === '{' || v && v[0] === '[' ? JSON.parse(v) : v)));
+
+function show(v) {
+  view = v;
+  for (const id of ['new', 'rec', 'item', 'empty']) $('#p-' + id).hidden = id !== v;
+  $('#go-new').setAttribute('aria-current', v === 'new');
+  $('#go-rec').setAttribute('aria-current', v === 'rec');
+  $('#player').hidden = !(v === 'item' && cur && cur.audio_url);
+  renderList();
+}
+
+/* ---------- history ---------- */
+function dayName(iso) {
+  const d = new Date(iso), t = new Date(); t.setHours(0,0,0,0);
+  const dd = new Date(d); dd.setHours(0,0,0,0);
+  const diff = Math.round((t - dd) / 864e5);
+  if (diff === 0) return 'Сегодня'; if (diff === 1) return 'Вчера';
+  return d.toLocaleDateString('ru-RU', {day: 'numeric', month: 'long', year: d.getFullYear() === t.getFullYear() ? undefined : 'numeric'});
+}
+function renderList() {
+  const q = $('#search').value.trim().toLowerCase();
+  const items = S.items.filter(i => !q || i.title.toLowerCase().includes(q) || (i.search || '').includes(q));
+  const box = $('#list');
+  if (!items.length) { box.innerHTML = `<div class="empty-hist">${q ? 'Ничего не нашлось.' : 'Здесь будут все расшифровки — с датой, временем и названием.'}</div>`; return; }
+  let html = '', last = '';
+  for (const i of items) {
+    const dn = dayName(i.created);
+    if (dn !== last) { html += `<div class="day">${esc(dn)}</div>`; last = dn; }
+    const time = new Date(i.created).toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'});
+    const pill = i.status === 'done' ? '' : `<span class="pill ${i.status}">${esc(i.status_name)}</span>`;
+    const mini = i.status === 'running' ? `<div class="mini"><i style="width:${Math.round(i.progress*100)}%"></i></div>` : '';
+    html += `<button class="row" data-id="${esc(i.id)}" aria-current="${view === 'item' && i.id === curId}"><span class="t">${esc(i.title)}</span><span class="m num"><span>${time} · ${fmt(i.duration)}</span>${pill}</span>${mini}</button>`;
+  }
+  box.innerHTML = html;
+}
+$('#list').addEventListener('click', e => { const r = e.target.closest('.row'); if (r) openItem(r.dataset.id); });
+$('#search').addEventListener('input', renderList);
+
+/* ---------- new ---------- */
+function renderSettings() {
+  const s = S.settings, o = S.options;
+  const name = (list, v) => (list.find(x => x[0] === v) || [v, v])[1];
+  $('#settings-line').innerHTML = `<span class="muted">Как расшифровывать:</span> <b>${esc(name(o.models, s.model))}</b> · <b>${esc(name(o.langs, s.language))}</b> · <b>${esc(name(o.speakers, s.speakers))}</b> <button class="btn quiet" id="set-toggle">${$('#settings').hidden ? 'Изменить' : 'Готово'}</button>`;
+  const seg = (key, list, hint) => `<div><label>${hint[0]}</label><div class="seg" data-key="${key}">${list.map(([v, n]) => `<button data-v="${esc(v)}" aria-pressed="${s[key] === v}">${esc(n)}</button>`).join('')}</div><small>${hint[1]}</small></div>`;
+  $('#settings').innerHTML =
+    seg('model', o.models, ['Качество', 'Быстрая — для голосовых и встреч. Точная — заметно дольше, когда важна каждая фраза.']) +
+    seg('language', o.langs, ['Язык', 'Если говорят на двух языках вперемешку — выберите «Русский и казахский».']) +
+    seg('speakers', o.speakers, ['Сколько человек говорит', 'Если знаете точно — укажите: разметка по людям будет точнее.']);
+}
+$('#settings-line').addEventListener('click', e => { if (e.target.id === 'set-toggle') { $('#settings').hidden = !$('#settings').hidden; renderSettings(); } });
+$('#settings').addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const key = b.parentElement.dataset.key; S.settings[key] = b.dataset.v;
+  await call('setSettings', JSON.stringify(S.settings)); renderSettings();
+});
+function renderInbox() {
+  const d = S.downloads;
+  $('#inbox-hint').textContent = d.length ? 'Записи за последние 14 дней, которых ещё нет в истории.' : 'Новых голосовых нет — всё уже в истории.';
+  $('#inbox').innerHTML = d.map(f => `<div class="file"><span class="fi">♪</span><span class="fn"><b title="${esc(f.name)}">${esc(f.name)}</b><span class="muted num">${esc(f.when)} · ${fmt(f.duration)}</span></span><button class="btn" data-path="${esc(f.path)}">Расшифровать</button></div>`).join('');
+}
+$('#inbox').addEventListener('click', async e => { const b = e.target.closest('button[data-path]'); if (!b) return; b.disabled = true; const id = await call('addFiles', JSON.stringify([b.dataset.path])); toast('Поставлено в очередь'); await refresh(); if (id) openItem(id); });
+$('#pick').addEventListener('click', async () => { const id = await call('pickFiles'); if (id) { toast('Поставлено в очередь'); await refresh(); openItem(id); } });
+const drop = $('#drop');
+document.addEventListener('dragover', e => { e.preventDefault(); if (view !== 'new') show('new'); drop.classList.add('hot'); });
+document.addEventListener('dragleave', e => { if (!e.relatedTarget) drop.classList.remove('hot'); });
+document.addEventListener('drop', async e => {
+  e.preventDefault(); drop.classList.remove('hot');
+  const uris = (e.dataTransfer.getData('text/uri-list') || '').split(/\r?\n/).filter(x => x.startsWith('file:'));
+  if (!uris.length) { toast('Не удалось прочитать файл — нажмите «Выбрать файл»'); return; }
+  const id = await call('addUris', JSON.stringify(uris)); if (id) { toast('Поставлено в очередь'); await refresh(); openItem(id); }
+});
+$('#go-new').addEventListener('click', () => { curId = null; show('new'); });
+
+/* ---------- recorder ---------- */
+var recSource = 'mic', recOn = false;
+$('#rec-source').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || recOn) return; recSource = b.dataset.v; for (const x of $('#rec-source').children) x.setAttribute('aria-pressed', x === b); });
+$('#go-rec').addEventListener('click', () => { curId = null; show('rec'); });
+$('#rec-btn').addEventListener('click', async () => {
+  if (!recOn) {
+    const err = await call('recordStart', recSource);
+    if (err) { toast(err); return; }
+    recOn = true; $('#live-text').innerHTML = ''; $('#live').hidden = false;
+  } else {
+    $('#rec-btn').disabled = true;
+    const r = await call('recordStop');
+    recOn = false; $('#rec-btn').disabled = false;
+    if (r && r.id) { toast('Запись сохранена — расшифровка началась'); await refresh(); openItem(r.id); }
+    else toast(r && r.error || 'Запись пустая — проверьте микрофон');
+  }
+  renderRec(0, 0);
+});
+function renderRec(sec, level) {
+  $('#recbox').classList.toggle('recording', recOn);
+  $('#rec-time').textContent = fmt(sec);
+  $('#rec-level').style.width = Math.min(100, Math.round(level * 400)) + '%';
+  $('#rec-btn').textContent = recOn ? 'Остановить и расшифровать' : 'Начать запись';
+  $('#rec-btn').className = 'btn recbtn ' + (recOn ? 'danger' : 'primary');
+  for (const x of $('#rec-source').children) x.disabled = recOn;
+}
+
+/* ---------- item ---------- */
+async function openItem(id) {
+  curId = id; $('#it-menu').hidden = true;
+  cur = await call('item', id);
+  if (!cur) { show('empty'); return; }
+  const a = $('#audio');
+  if (a.dataset.id !== id) { a.pause(); a.dataset.id = id; a.dataset.src = ''; $('#pl-dur').textContent = fmt(cur.duration); $('#pl-cur').textContent = '0:00'; $('#pl-scrub').value = 0; }
+  setAudio();
+  renderItem(true); show('item');
+}
+function setAudio() {
+  const a = $('#audio');
+  if (cur && cur.audio_url && a.dataset.src !== cur.audio_url) { a.src = cur.audio_url; a.dataset.src = cur.audio_url; a.playbackRate = speeds[speedIdx]; }
+  $('#player').hidden = !(view === 'item' && cur && cur.audio_url);
+}
+function renderItem(full) {
+  const i = cur;
+  if (document.activeElement !== $('#it-title')) $('#it-title').textContent = i.title;
+  $('#it-meta').innerHTML = [i.created_text, fmt(i.duration), i.model_name, i.lang_name, i.took ? 'готово за ' + fmt(i.took) : '', i.origin === 'agent' ? 'добавил агент' : '']
+    .filter(Boolean).map(esc).map(x => `<span>${x}</span>`).join('');
+  const st = $('#it-status');
+  st.hidden = i.status === 'done';
+  if (i.status === 'queued') st.innerHTML = `<b>В очереди${i.ahead ? `, перед ней ${i.ahead}` : ''}</b><span class="muted">Расшифровка займёт около ${fmt(i.estimate)}. Пока можно слушать запись.</span>`;
+  if (i.status === 'running') st.innerHTML = `<b>Расшифровывается</b><div class="bar"><i style="width:${Math.round(i.progress*100)}%"></i></div><span class="muted num">Прошло ${fmt(i.elapsed)} из примерно ${fmt(i.estimate)}. Окно можно закрыть — расшифровка продолжится при следующем запуске.</span>`;
+  if (i.status === 'error') st.innerHTML = `<b style="color:var(--err)">Не получилось</b><span class="muted">${esc(i.error || '')}</span><div><button class="btn primary" id="st-retry">Расшифровать заново</button></div>`;
+  $('#it-copy').disabled = i.status !== 'done';
+  $('#m-edit').disabled = i.status !== 'done';
+  if (!full) return;
+  const sp = $('#it-speakers');
+  sp.innerHTML = i.speakers.length > 1 || (i.speakers.length === 1 && i.speakers[0].named)
+    ? `<span class="muted">Кто говорит:</span>` + i.speakers.map(s => `<button class="chip" data-spk="${esc(s.id)}" title="Нажмите, чтобы дать имя"><i style="background:var(--s${s.color})"></i>${esc(s.name)}</button>`).join('') + `<span class="muted" style="font-size:12px">— нажмите, чтобы подписать</span>`
+    : '';
+  const doc = $('#it-doc');
+  const names = Object.fromEntries(i.speakers.map(s => [s.id, s]));
+  doc.hidden = i.status !== 'done';
+  doc.innerHTML = i.paragraphs.length ? i.paragraphs.map(([st, , spk, tx], n) => {
+    const s = names[spk];
+    const who = s && (i.speakers.length > 1 || s.named) ? `<div class="who" style="color:var(--s${s.color})">${esc(s.name)}</div>` : '';
+    return `<div class="para" data-n="${n}" data-t="${st}"><div class="tm">${fmt(st/1000)}</div><div>${who}<div class="tx">${esc(tx)}</div></div></div>`;
+  }).join('') : `<div class="para"><div></div><div class="muted">В записи не нашлось речи.</div></div>`;
+  paraEls = [...doc.querySelectorAll('.para[data-t]')]; curPara = -1;
+}
+$('#it-doc').addEventListener('click', e => {
+  if (window.getSelection().toString()) return;  // selecting text, not seeking
+  const p = e.target.closest('.para[data-t]'); if (!p) return;
+  const a = $('#audio'); a.currentTime = p.dataset.t / 1000; a.play();
+});
+$('#it-speakers').addEventListener('click', e => {
+  const c = e.target.closest('.chip'); if (!c || c.querySelector('input')) return;
+  const spk = c.dataset.spk, old = c.textContent;
+  c.innerHTML = c.querySelector('i').outerHTML + `<input value="${esc(old)}" aria-label="Имя говорящего">`;
+  const inp = c.querySelector('input'); inp.focus(); inp.select();
+  const done = async ok => { if (ok && inp.value.trim()) { await call('renameSpeaker', curId, spk, inp.value.trim()); } openItem(curId); };
+  inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') done(true); if (ev.key === 'Escape') done(false); });
+  inp.addEventListener('blur', () => done(true), {once: true});
+});
+$('#it-title').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
+$('#it-title').addEventListener('blur', async e => { const t = e.target.textContent.trim(); if (t && cur && t !== cur.title) { await call('rename', curId, t); toast('Переименовано'); refresh(); } });
+$('#it-copy').addEventListener('click', async () => { await call('copyText', curId); toast('Текст скопирован'); });
+$('#it-more').addEventListener('click', e => { e.stopPropagation(); $('#it-menu').hidden = !$('#it-menu').hidden; });
+document.addEventListener('click', e => { if (!e.target.closest('#it-menu')) $('#it-menu').hidden = true; });
+$('#m-edit').addEventListener('click', () => call('openEditor', curId));
+$('#m-folder').addEventListener('click', () => call('openFolder', curId));
+$('#m-retry').addEventListener('click', async () => { await call('retry', curId); toast('Поставлено в очередь'); await refresh(); openItem(curId); });
+$('#it-status').addEventListener('click', async e => { if (e.target.id === 'st-retry') { await call('retry', curId); await refresh(); openItem(curId); } });
+let delArmed = false;
+$('#m-del').addEventListener('click', async e => {
+  e.stopPropagation();
+  if (!delArmed) { delArmed = true; e.target.textContent = 'Точно удалить? Нажмите ещё раз'; setTimeout(() => { delArmed = false; e.target.textContent = 'Удалить из истории'; }, 4000); return; }
+  delArmed = false; $('#it-menu').hidden = true; $('#audio').pause();
+  await call('remove', curId); toast('Удалено. Файлы лежат в папке «Удалённые» хранилища'); curId = null; cur = null; await refresh(); show('new');
+});
+
+/* ---------- player ---------- */
+const audio = $('#audio'), speeds = [1, 1.25, 1.5, 2]; let speedIdx = 0;
+$('#pl-play').addEventListener('click', () => audio.paused ? audio.play() : audio.pause());
+$('#pl-back').addEventListener('click', () => audio.currentTime = Math.max(0, audio.currentTime - 10));
+$('#pl-fwd').addEventListener('click', () => audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 10));
+$('#pl-speed').addEventListener('click', () => { speedIdx = (speedIdx + 1) % speeds.length; audio.playbackRate = speeds[speedIdx]; $('#pl-speed').textContent = String(speeds[speedIdx]).replace('.', ',') + '×'; });
+$('#pl-scrub').addEventListener('input', e => { if (audio.duration) audio.currentTime = e.target.value / 1000 * audio.duration; });
+audio.addEventListener('play', () => $('#pl-play').textContent = '❚❚');
+audio.addEventListener('pause', () => $('#pl-play').textContent = '▶');
+audio.addEventListener('loadedmetadata', () => $('#pl-dur').textContent = fmt(audio.duration));
+audio.addEventListener('timeupdate', () => {
+  const t = audio.currentTime;
+  $('#pl-cur').textContent = fmt(t);
+  if (audio.duration && document.activeElement !== $('#pl-scrub')) $('#pl-scrub').value = Math.round(t / audio.duration * 1000);
+  let n = -1; for (let k = 0; k < paraEls.length; k++) { if (paraEls[k].dataset.t / 1000 <= t + 0.05) n = k; else break; }
+  if (n !== curPara) {
+    if (paraEls[curPara]) paraEls[curPara].classList.remove('cur');
+    curPara = n;
+    if (paraEls[n]) { paraEls[n].classList.add('cur'); if (!audio.paused) paraEls[n].scrollIntoView({block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'}); }
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && view === 'item' && !e.target.closest('input, [contenteditable="true"], button')) { e.preventDefault(); audio.paused ? audio.play() : audio.pause(); }
+});
+
+/* ---------- sync with the app ---------- */
+async function refresh() {
+  S = await call('state');
+  document.documentElement.dataset.theme = S.theme;
+  renderList(); renderSettings(); renderInbox();
+  if (view === 'item' && curId) {
+    const fresh = await call('item', curId);
+    if (!fresh) { show('new'); return; }
+    const full = !cur || fresh.status !== cur.status || fresh.title !== cur.title;
+    cur = fresh; renderItem(full); setAudio();
+  }
+}
+new QWebChannel(qt.webChannelTransport, async ch => {
+  api = ch.objects.api;
+  api.changed.connect(() => refresh());
+  api.recTick.connect((sec, level) => renderRec(sec, level));
+  api.liveText.connect((t, note) => {
+    if (note) $('#live-note').textContent = note;
+    if (t) { const p = document.createElement('p'); p.textContent = t; $('#live-text').appendChild(p); p.scrollIntoView({block: 'nearest'}); }
+  });
+  api.toast.connect(t => toast(t));
+  await refresh();
+  const first = S.items[0];
+  if (first) openItem(first.id); else show('new');
+});
+</script>
+</body>
+</html>
