@@ -55,6 +55,7 @@ Windows. Ведётся работа над готовой сборкой в `.e
 ## Из чего сделано
 
 - Движок расшифровки — [noScribe](https://github.com/kaixxx/noScribe) Кая Дрёге (Kai Dröge), версия 0.8, GPL-3.0; на нём — [faster-whisper](https://github.com/SYSTRAN/faster-whisper) с моделью Whisper large-v3-turbo и [pyannote.audio](https://github.com/pyannote/pyannote-audio) для разделения голосов.
+- Модели разделения голосов — pyannote speaker-diarization-community-1 ([pyannoteAI](https://huggingface.co/pyannote)), CC-BY-4.0; лежат в `engine/pyannote` так же, как в noScribe.
 - Редактор текста — [noScribeEditor](https://github.com/kaixxx/noScribeEditor), GPL-3.0.
 - Окно, история, запись и очередь — эта программа.
 
