@@ -385,8 +385,13 @@ function renderItem(full) {
     .filter(Boolean).map(esc).map(x => `<span>${x}</span>`).join('');
   const st = $('#it-status');
   st.hidden = i.status === 'done';
-  if (i.status === 'queued') st.innerHTML = `<b>В очереди${i.ahead ? `, перед ней ${i.ahead}` : ''}</b><span class="muted">Расшифровка займёт около ${fmt(i.estimate)}. Пока можно слушать запись.</span>`;
-  if (i.status === 'running') st.innerHTML = `<b>Расшифровывается</b><div class="bar"><i style="width:${Math.round(i.progress*100)}%"></i></div><span class="muted num">Прошло ${fmt(i.elapsed)} из примерно ${fmt(i.estimate)}. Окно можно закрыть — расшифровка продолжится при следующем запуске.</span>`;
+  if (i.status === 'queued') st.innerHTML = `<b>${i.interrupted ? 'Прервалась — начнётся заново сама' : 'В очереди'}${i.ahead ? `, перед ней ${i.ahead}` : ''}</b><span class="muted">Расшифровка займёт около ${fmt(i.estimate)}. Пока можно слушать запись.</span>`;
+  if (i.status === 'running') {
+    const last = i.paragraphs.length ? i.paragraphs[i.paragraphs.length - 1] : null;
+    st.innerHTML = `<b>${esc(i.stage || 'Расшифровывается')} · ${Math.round(i.progress*100)}%</b><div class="bar"><i style="width:${Math.round(i.progress*100)}%"></i></div>`
+      + `<span class="muted num">Идёт ${fmt(i.elapsed)}, ${i.left == null ? 'сколько осталось — станет ясно, когда пойдёт текст' : 'осталось примерно ' + fmt(i.left)}. Окно можно закрыть: расшифровка идёт отдельно от него и не прервётся.</span>`
+      + (last ? `<span class="muted">Дошла до ${fmt(last[1]/1000)} записи — текст ниже появляется по ходу.</span>` : '');
+  }
   if (i.status === 'error') st.innerHTML = `<b style="color:var(--err)">Не получилось</b><span class="muted">${esc(i.error || '')}</span><div><button class="btn primary" id="st-retry">Расшифровать заново</button></div>`;
   $('#it-copy').disabled = i.status !== 'done';
   $('#m-edit').disabled = i.status !== 'done';
@@ -397,7 +402,7 @@ function renderItem(full) {
     : '';
   const doc = $('#it-doc');
   const names = Object.fromEntries(i.speakers.map(s => [s.id, s]));
-  doc.hidden = i.status !== 'done';
+  doc.hidden = !(i.status === 'done' || (i.status === 'running' && i.paragraphs.length));
   doc.innerHTML = i.paragraphs.length ? i.paragraphs.map(([st, , spk, tx], n) => {
     const s = names[spk];
     const who = s && (i.speakers.length > 1 || s.named) ? `<div class="who" style="color:var(--s${s.color})">${esc(s.name)}</div>` : '';
@@ -462,6 +467,7 @@ document.addEventListener('keydown', e => {
 });
 
 /* ---------- sync with the app ---------- */
+function lastEnd(i) { const p = (i && i.paragraphs) || []; return p.length ? p.length + ':' + p[p.length - 1][1] : ''; }
 async function refresh() {
   S = await call('state');
   document.documentElement.dataset.theme = S.theme;
@@ -469,7 +475,8 @@ async function refresh() {
   if (view === 'item' && curId) {
     const fresh = await call('item', curId);
     if (!fresh) { show('new'); return; }
-    const full = !cur || fresh.status !== cur.status || fresh.title !== cur.title;
+    const full = !cur || fresh.status !== cur.status || fresh.title !== cur.title
+      || (fresh.status === 'running' && lastEnd(fresh) !== lastEnd(cur));
     cur = fresh; renderItem(full); setAudio();
   }
 }

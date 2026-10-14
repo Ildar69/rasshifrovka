@@ -61,6 +61,12 @@ OFFLINE_ENV = {'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1',
 
 LOCK = STORE / '.engine.lock'
 LOCK_STALE_SEC = 90
+CANCEL = STORE / '.cancel'
+# noScribe names its log after the transcript file; ours is always transcript.html
+ENGINE_LOG = Path(os.environ.get('LOCALAPPDATA', '')) / 'noScribe' / 'noScribe' / 'log' / 'transcript.log'
+# a run cut off by a crash is started again by itself; after this many tries it stops with an error
+MAX_ATTEMPTS = 3
+STAGE_PROGRESS = re.compile(r'(segmentation|embeddings): (\d+)%')
 
 ANCHOR = re.compile(r'<a name="ts_(\d+)_(\d+)_([^"]*)"\s*>(.*?)</a>', re.S)
 TAG = re.compile(r'<[^>]+>')
@@ -335,33 +341,278 @@ def editor_command(html_path):
     return str(EDITOR_EXE), [str(html_path)]
 
 
-def run_blocking(item, owner='agent', wait=True):
-    """For the agent: run one item to the end, waiting for the window's run to finish first."""
-    while not lock_take(owner):
-        if not wait:
-            raise RuntimeError('расшифровщик занят')
-        time.sleep(5)
-    t0 = time.time()
+# --- the worker: a process of its own that runs the queue ---
+#
+# Ildar 14.10.2026: a 1:18 meeting died at minute 8 because the engine was a child of
+# the agent's session and went down with it; the window showed it running for an hour.
+# So the engine belongs to nobody: the window and the agent only put a recording in the
+# queue and make sure the worker is alive. The worker outlives both, keeps the laptop
+# awake while it works, and a run that died anyway is started again by itself.
+
+def started_ts(item):
     try:
-        item.meta.update(status='running', started=dt.datetime.now().isoformat(timespec='seconds'))
-        item.save()
-        flags = 0x08000000 if os.name == 'nt' else 0  # CREATE_NO_WINDOW
-        p = subprocess.Popen(engine_command(item), cwd=str(NOSCRIBE_DIR), env=engine_env(),
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
-        while p.poll() is None:
-            lock_touch()
-            time.sleep(3)
-        item.reload()
-        if p.returncode == 0 and item.html_path.exists():
-            item.meta.update(status='done', took=round(time.time() - t0), error='')
-            item.save()
-            item.write_md()
-        else:
-            item.meta.update(status='error', error=f'noScribe завершился с кодом {p.returncode}')
-            item.save()
-    finally:
+        return dt.datetime.fromisoformat(item.meta.get('started')).timestamp()
+    except Exception:
+        return 0.0
+
+
+def recover_stale():
+    """Runs marked "running" while nobody holds the engine died: back into the queue."""
+    if lock_busy():
+        return
+    for it in items():
+        if it.status == 'running':
+            requeue_dead(it)
+
+
+def requeue_dead(it):
+    tries = it.meta.get('attempts', 1)
+    if tries >= MAX_ATTEMPTS:
+        it.meta.update(status='error', error=f'Расшифровка прерывалась {tries} раза подряд. '
+                                              'Нажмите "Расшифровать заново"; если повторится — запись, возможно, повреждена.')
+    else:
+        it.meta.update(status='queued', error='', interrupted=dt.datetime.now().isoformat(timespec='seconds'))
+    it.save()
+
+
+def queued():
+    return sorted((i for i in items() if i.status == 'queued'), key=lambda i: i.created)
+
+
+def worker_command():
+    import sys
+    if getattr(sys, 'frozen', False):
+        return [sys.executable, '--worker']
+    exe = _HERE / 'dist' / 'Rasshifrovka' / 'Rasshifrovka.exe'
+    if exe.exists():
+        return [str(exe), '--worker']
+    py = Path(sys.executable)
+    if py.with_name('pythonw.exe').exists():
+        py = py.with_name('pythonw.exe')
+    return [str(py), str(Path(__file__).resolve()), '--worker']
+
+
+def ensure_worker():
+    """Start the worker if there is work and nobody is doing it. Returns True if one was started."""
+    recover_stale()
+    if lock_busy() or not queued():
+        return False
+    # the lock is taken before the start: the window asks every 1.5 s, the worker needs a few
+    # seconds to come up, and a second worker must not be started meanwhile
+    if not lock_take('starting'):
+        return False
+    try:
+        spawn_detached(worker_command())
+    except Exception:
         lock_release()
+        raise
+    return True
+
+
+def spawn_detached(cmd):
+    """A process that survives whoever started it. Windows itself (WMI) starts it, so it is
+    nobody's child: closing the agent's session kills the whole tree under it (checked
+    14.10.2026 — a detached child with CREATE_BREAKAWAY_FROM_JOB died with its parent's task),
+    a WMI-started process is not in that tree. Plain detached start is the fallback."""
+    if os.name != 'nt':
+        subprocess.Popen(cmd, start_new_session=True, stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
+        return
+    try:
+        _spawn_wmi(cmd)
+        return
+    except Exception:
+        pass
+    DETACHED, NEW_GROUP = 0x00000008, 0x00000200
+    subprocess.Popen(cmd, creationflags=DETACHED | NEW_GROUP, close_fds=True,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def _spawn_wmi(cmd):
+    import base64
+    line = subprocess.list2cmdline(cmd).replace("'", "''")
+    ps = (f"$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create "
+          f"-Arguments @{{CommandLine='{line}'; CurrentDirectory='{str(_HERE)}'}}; "
+          f"Write-Output \"$($r.ReturnValue) $($r.ProcessId)\"")
+    r = subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-EncodedCommand',
+                        base64.b64encode(ps.encode('utf-16-le')).decode()],
+                       creationflags=0x08000000, timeout=60, capture_output=True, text=True)
+    code, _, pid = (r.stdout or '').strip().partition(' ')
+    if code != '0':
+        raise OSError(f'WMI не запустил процесс: {r.stdout.strip()} {r.stderr.strip()[:200]}')
+    return int(pid)
+
+
+def keep_awake(on):
+    if os.name != 'nt':
+        return
+    try:
+        import ctypes
+        ES_CONTINUOUS, ES_SYSTEM_REQUIRED = 0x80000000, 0x00000001
+        ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | (ES_SYSTEM_REQUIRED if on else 0))
+    except Exception:
+        pass
+
+
+def request_cancel(iid, wait_sec=20):
+    """Stop the engine on this item (before deleting it); waits until the worker lets go of its files."""
+    CANCEL.write_text(iid, encoding='utf-8')
+    t_end = time.time() + wait_sec
+    while time.time() < t_end:
+        it = Item(STORE / iid)
+        if it.status != 'running' or not lock_busy():
+            break
+        time.sleep(0.5)
+    try:
+        CANCEL.unlink()
+    except OSError:
+        pass
+
+
+def _cancel_requested(it):
+    try:
+        return CANCEL.read_text(encoding='utf-8').strip() == it.id
+    except OSError:
+        return False
+
+
+def _lock_owner():
+    try:
+        return LOCK.read_text(encoding='utf-8').split()[0]
+    except (OSError, IndexError):
+        return ''
+
+
+def run_worker():
+    if lock_busy() and _lock_owner() == 'starting':
+        LOCK.write_text(f'worker {os.getpid()} {dt.datetime.now():%H:%M:%S}', encoding='utf-8')
+    elif not lock_take('worker'):
+        return
+    keep_awake(True)
+    try:
+        for it in items():  # we hold the engine now, so anything still "running" is dead
+            if it.status == 'running':
+                requeue_dead(it)
+        while True:
+            q = queued()
+            if not q:
+                break
+            run_item(q[0])
+    finally:
+        keep_awake(False)
+        lock_release()
+
+
+def run_item(item):
+    item.meta.update(status='running', started=dt.datetime.now().isoformat(timespec='seconds'), error='',
+                     attempts=item.meta.get('attempts', 0) + 1, worker_pid=os.getpid())
+    item.save()
+    if not engine_ready():
+        item.meta.update(status='error', error=f'не найден движок расшифровки в {NOSCRIBE_DIR} — запустите install.ps1')
+        item.save()
+        return
+    t0 = time.time()
+    try:  # a new run starts from scratch; a fresh file also tells when the text stage began
+        item.html_path.unlink()
+    except OSError:
+        pass
+    flags = 0x08000000 if os.name == 'nt' else 0  # CREATE_NO_WINDOW
+    p = subprocess.Popen(engine_command(item), cwd=str(NOSCRIBE_DIR), env=engine_env(),
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+    canceled = False
+    while p.poll() is None:
+        lock_touch()
+        if not (item.folder / 'meta.json').exists() or _cancel_requested(item):
+            p.kill()
+            p.wait()
+            canceled = True
+            break
+        time.sleep(2)
+    if not (item.folder / 'meta.json').exists():
+        return
+    item.reload()
+    if canceled:
+        item.meta.update(status='error', error='Остановлено')
+    elif p.returncode == 0 and item.html_path.exists():
+        item.meta.update(status='done', took=round(time.time() - t0), error='', attempts=0)
+        item.save()
+        item.write_md()
+        return
+    else:
+        item.meta.update(status='error', error=f'Движок остановился (код {p.returncode}). Попробуйте ещё раз; '
+                                               'если повторится — запись, возможно, повреждена.')
+    item.save()
+
+
+def progress(item):
+    """Where the engine really is: (stage, 0..1). Speakers come first (noScribe log), then the
+    text (the transcript file noScribe rewrites every few seconds)."""
+    if item.status != 'running':
+        return '', 0.0
+    t0 = started_ts(item)
+    dur = item.meta.get('duration') or 0
+    speakers = str(item.meta.get('speakers', 'auto')) != 'none'
+    text_from = 0.5 if speakers else 0.05
+    try:
+        if item.html_path.stat().st_mtime >= t0 and dur:
+            paras = item.paragraphs()
+            if paras:
+                return 'Распознаю речь', min(0.99, text_from + (paras[-1][1] / 1000 / dur) * (0.99 - text_from))
+    except OSError:
+        pass
+    if speakers:
+        try:
+            if ENGINE_LOG.stat().st_mtime >= t0:
+                seg = emb = 0
+                for name, pct in STAGE_PROGRESS.findall(ENGINE_LOG.read_text(encoding='utf-8', errors='replace')):
+                    if name == 'segmentation':
+                        seg = int(pct)
+                    else:
+                        emb = int(pct)
+                if seg or emb:
+                    return 'Разбираю, кто говорит', 0.05 + 0.45 * (0.3 * seg + 0.7 * emb) / 100
+        except OSError:
+            pass
+    return 'Готовлю звук', 0.02
+
+
+def time_left(item):
+    """Seconds left, or None while it cannot be told honestly. Speakers and text take very
+    different time, so: on the text stage — from the real pace of the text (the file is
+    created when the stage starts); before it — from the measured speed of the laptop."""
+    dur = item.meta.get('duration') or 0
+    elapsed = max(0.0, time.time() - started_ts(item))
+    try:
+        st = item.html_path.stat()
+        if st.st_mtime >= started_ts(item):
+            paras = item.paragraphs()
+            pos = paras[-1][1] / 1000 if paras else 0
+            if pos >= 60:
+                return max(0.0, (dur - pos) * (time.time() - st.st_ctime) / pos)
+    except OSError:
+        pass
+    left = dur * SPEED.get(item.meta.get('model'), 2.0) + 25 - elapsed
+    return left if left > 60 else None
+
+
+def run_blocking(item, owner='agent', wait=True):
+    """For the agent: hand the item to the worker and, if asked, wait for it. Waiting is only
+    watching: if the agent goes away, the worker carries on."""
+    ensure_worker()
+    while wait:
+        item.reload()
+        if item.status in ('done', 'error'):
+            break
+        if not lock_busy():
+            ensure_worker()
+        time.sleep(10)
     return item
+
+
+if __name__ == '__main__':
+    import sys
+    if '--worker' in sys.argv:
+        run_worker()
 
 # --- playback copy: the window's built-in Chromium has no AAC/H.264, so m4a/mp4 voice memos
 # get an Opus copy for the player only; transcription always uses the original ---

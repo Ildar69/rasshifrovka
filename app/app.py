@@ -72,17 +72,14 @@ class Api(QtCore.QObject):
         super().__init__()
         self.win = win
         self.settings = load_settings()
-        self.proc = None
-        self.proc_item = None
-        self.t0 = 0
         self.sig = None
         self.dur_cache = {}
         self.converting = set()
         self.rec = None
         self.live = None
         self.live_pos = 0.0
-        self.recover()
         self.recover_recordings()
+        rs.ensure_worker()
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.tick)
         self.timer.start(1500)
@@ -94,13 +91,11 @@ class Api(QtCore.QObject):
         m = it.meta
         dur = m.get('duration') or 0
         est = dur * rs.SPEED.get(m.get('model'), 2.0) + 25
-        elapsed, progress = 0, 0.0
+        elapsed, progress, stage, left = 0, 0.0, '', est
         if it.status == 'running':
-            try:
-                elapsed = time.time() - dt.datetime.fromisoformat(m.get('started')).timestamp()
-            except Exception:
-                elapsed = 0
-            progress = min(0.97, elapsed / est) if est else 0
+            elapsed = max(0.0, time.time() - rs.started_ts(it))
+            stage, progress = rs.progress(it)
+            left = rs.time_left(it)
         d = {'id': it.id, 'title': it.title, 'created': it.created.isoformat(), 'duration': dur,
              'status': it.status, 'status_name': rs.STATUS_NAMES.get(it.status, it.status), 'progress': progress}
         if full:
@@ -111,9 +106,10 @@ class Api(QtCore.QObject):
                 'model_name': 'модель ' + rs.model_title(m.get('model')).lower(),
                 'lang_name': dict(LANG_OPTIONS).get(m.get('language'), m.get('language', '')),
                 'took': m.get('took'), 'origin': m.get('origin'), 'error': m.get('error', ''),
-                'elapsed': elapsed, 'estimate': est, 'ahead': self.queue_ahead(it),
+                'elapsed': elapsed, 'estimate': est, 'left': left, 'stage': stage,
+                'interrupted': bool(m.get('interrupted')), 'ahead': self.queue_ahead(it),
                 'audio_url': self.audio_url(it),
-                'paragraphs': it.paragraphs() if it.status == 'done' else [],
+                'paragraphs': it.paragraphs() if it.status in ('done', 'running') else [],
                 'speakers': [{'id': s, 'name': it.speaker_name(s), 'named': s in names, 'color': n % 6}
                              for n, s in enumerate(spk)],
             })
@@ -182,6 +178,7 @@ class Api(QtCore.QObject):
                 self.toast.emit(f'{p.name} — не аудиофайл, пропущен')
                 continue
             last = rs.create_item(p, origin='app', **self.settings)
+        rs.ensure_worker()
         self.changed.emit()
         return last.id if last else ''
 
@@ -218,7 +215,8 @@ class Api(QtCore.QObject):
         it = self._item(iid)
         it.meta.setdefault('speaker_names', {})[spk] = name
         it.save()
-        it.write_md()
+        if it.status == 'done':
+            it.write_md()
 
     @pyqtSlot(str)
     def copyText(self, iid):
@@ -236,16 +234,17 @@ class Api(QtCore.QObject):
     @pyqtSlot(str)
     def retry(self, iid):
         it = self._item(iid)
-        it.meta.update(status='queued', error='', origin='app' if it.meta.get('origin') == 'agent' else it.meta.get('origin', 'app'))
+        it.meta.update(status='queued', error='', attempts=0)
+        it.meta.pop('interrupted', None)
         it.save()
+        rs.ensure_worker()
         self.changed.emit()
 
     @pyqtSlot(str)
     def remove(self, iid):
         """Not a hard delete: the folder moves to "Удалённые" in the store and can be put back by hand."""
-        if self.proc_item is not None and self.proc_item.id == iid:
-            self.proc.kill()
-            self.proc.waitForFinished(3000)
+        if self._item(iid).status == 'running':
+            rs.request_cancel(iid)
         TRASH.mkdir(parents=True, exist_ok=True)
         dst, n = TRASH / iid, 2
         while dst.exists():
@@ -257,86 +256,21 @@ class Api(QtCore.QObject):
     def queue_ahead(self, it):
         if it.status != 'queued':
             return 0
-        q = sorted((i for i in rs.items() if i.status == 'queued' and i.meta.get('origin') != 'agent'),
-                   key=lambda i: i.created)
         busy = 1 if any(i.status == 'running' for i in rs.items()) else 0
-        for n, i in enumerate(q):
+        for n, i in enumerate(rs.queued()):
             if i.id == it.id:
                 return n + busy
         return busy
 
-    def recover(self):
-        if rs.lock_busy():
-            return
-        for it in rs.items():
-            if it.status == 'running':
-                agent = it.meta.get('origin') == 'agent'
-                it.meta.update(status='error' if agent else 'queued', error='прервано' if agent else '')
-                it.save()
-
     def tick(self):
-        if self.proc is not None:
-            rs.lock_touch()
-        elif not rs.lock_busy():
-            q = [i for i in rs.items() if i.status == 'queued' and i.meta.get('origin') != 'agent']
-            if q:
-                self.start(sorted(q, key=lambda i: i.created)[0])
+        # the engine runs in its own process (rs.run_worker); the window only makes sure
+        # someone is working on the queue and shows what is going on
+        rs.ensure_worker()
         its = rs.items()
         sig = tuple((i.id, i.title, i.status) for i in its) + tuple(p.name for p in rs.new_in_downloads()[:30])
         if sig != self.sig or any(i.status == 'running' for i in its):
             self.sig = sig
             self.changed.emit()
-
-    def start(self, it):
-        if not rs.engine_ready():
-            it.meta.update(status='error', error=f'не найден движок расшифровки в {rs.NOSCRIBE_DIR} — запустите install.ps1')
-            it.save()
-            return
-        if not rs.lock_take('window'):
-            return
-        it.meta.update(status='running', started=dt.datetime.now().isoformat(timespec='seconds'), error='')
-        it.save()
-        cmd = rs.engine_command(it)
-        p = QtCore.QProcess(self)
-        env = QtCore.QProcessEnvironment.systemEnvironment()
-        for k, v in rs.engine_env().items():
-            if k in rs.OFFLINE_ENV or k == 'RASSHIFROVKA_EXTRA_PROMPT':
-                env.insert(k, v)
-        p.setProcessEnvironment(env)
-        p.setWorkingDirectory(str(rs.NOSCRIBE_DIR))
-        p.setProcessChannelMode(QtCore.QProcess.ProcessChannelMode.MergedChannels)
-        p.readyReadStandardOutput.connect(lambda: p.readAllStandardOutput())
-        p.finished.connect(lambda code, _st, it=it: self.finished(it, code))
-        self.proc, self.proc_item, self.t0 = p, it, time.time()
-        p.start(cmd[0], cmd[1:])
-
-    def finished(self, it, code):
-        self.proc = self.proc_item = None
-        rs.lock_release()
-        if not (it.folder / 'meta.json').exists():  # removed while running
-            self.changed.emit()
-            return
-        it.reload()
-        if code == 0 and it.html_path.exists():
-            it.meta.update(status='done', took=round(time.time() - self.t0), error='')
-            it.save()
-            it.write_md()
-            self.toast.emit(f'Готово: {it.title}')
-        else:
-            it.meta.update(status='error', error=f'Движок остановился (код {code}). Попробуйте ещё раз; '
-                                                 'если повторится — запись, возможно, повреждена.')
-            it.save()
-        self.changed.emit()
-
-    def stop_engine_for_exit(self):
-        if self.proc is not None:
-            self.proc.kill()
-            self.proc.waitForFinished(3000)
-            if self.proc_item and (self.proc_item.folder / 'meta.json').exists():
-                self.proc_item.reload()
-                self.proc_item.meta.update(status='queued')
-                self.proc_item.save()
-            rs.lock_release()
 
     # ---------- recording ----------
     REC_ROOT = rs.STORE / '.recordings'
@@ -419,6 +353,7 @@ class Api(QtCore.QObject):
         it = rs.create_item(path, title=f'{kind} {rec.started_at:%d.%m %H:%M}', origin='app',
                             created=rec.started_at, **self.settings)
         shutil.rmtree(rec.dir, ignore_errors=True)  # only after the copy is safe in the store
+        rs.ensure_worker()
         self.changed.emit()
         return json.dumps({'id': it.id})
 
@@ -465,8 +400,7 @@ class Main(QtWidgets.QMainWindow):
             else:
                 e.ignore()
                 return
-        self.api.stop_engine_for_exit()
-        e.accept()
+        e.accept()  # the transcription is not the window's: it goes on after the window is closed
 
 
 def make_icon():
@@ -485,6 +419,9 @@ def make_icon():
 
 
 def main():
+    if '--worker' in sys.argv:
+        rs.run_worker()
+        return
     if os.name == 'nt':
         try:
             import ctypes
