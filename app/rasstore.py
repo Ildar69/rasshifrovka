@@ -55,6 +55,8 @@ MODEL_NAMES = {'fast': 'Быстрая', 'precise': 'Точная'}
 STATUS_NAMES = {'queued': 'В очереди', 'running': 'Расшифровывается', 'done': 'Готово', 'error': 'Ошибка'}
 # сколько секунд работы на секунду записи на ноутбуке без видеокарты (i3-1315U, 8 ГБ), замер 13.10.2026
 SPEED = {'fast': 1.6, 'precise': 3.0}
+# без разделения по голосам — примерно вдвое быстрее: замер 15.10.2026, 1,2–1,3 против 2,9 на коротких записях
+NO_SPEAKERS_FACTOR = 0.5
 
 OFFLINE_ENV = {'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1',
                'HF_HUB_DISABLE_TELEMETRY': '1', 'PYANNOTE_METRICS_ENABLED': '0'}
@@ -644,8 +646,16 @@ def time_left(item):
                 return max(0.0, (dur - pos) * (time.time() - st.st_ctime) / pos)
     except OSError:
         pass
-    left = dur * SPEED.get(item.meta.get('model'), 2.0) + 25 - elapsed
+    left = estimate(item.meta) - elapsed
     return left if left > 60 else None
+
+
+def estimate(meta):
+    """Seconds of work expected for an item, before anything is measured; 25 s is loading the model."""
+    k = SPEED.get(meta.get('model'), 2.0)
+    if str(meta.get('speakers', 'auto')) == 'none':
+        k *= NO_SPEAKERS_FACTOR
+    return (meta.get('duration') or 0) * k + 25
 
 
 def run_blocking(item, owner='agent', wait=True):

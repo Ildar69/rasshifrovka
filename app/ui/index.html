@@ -88,9 +88,27 @@ main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .file .fi { width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex: none; }
 .file .fn { flex: 1; min-width: 0; }
 .file .fn b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
-.settings-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; }
-.settings { display: grid; gap: 16px; padding: 4px 16px 16px; }
+.settings { display: grid; gap: 18px; }
 .settings label { font-weight: 600; display: block; margin-bottom: 6px; }
+
+/* "how to transcribe" window: opens when a file is chosen, nothing is queued before "Расшифровать" */
+.modal { position: fixed; inset: 0; z-index: 20; background: rgba(15,15,10,.38); display: grid; place-items: center; padding: 24px; }
+.dlg { width: 560px; max-width: 100%; max-height: 100%; overflow-y: auto; padding: 22px 24px 20px; display: grid; gap: 18px; }
+.dlg h2 { font-size: 20px; font-weight: 650; }
+.dlg .files { display: grid; gap: 2px; margin-top: 6px; }
+.dlg .files div { display: flex; gap: 12px; justify-content: space-between; color: var(--muted); }
+.dlg .files span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dlg .foot { display: flex; align-items: center; gap: 10px; }
+.dlg .foot .muted { flex: 1; }
+.switchrow { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; border-radius: 12px; background: var(--surface2); text-align: left; }
+.switchrow b { display: block; }
+.switchrow small { color: var(--muted); }
+.switch { flex: none; width: 44px; height: 26px; border-radius: 13px; border: 0; padding: 3px; background: var(--line); transition: background .15s; }
+.switch i { display: block; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s; }
+.switch[aria-checked="true"] { background: var(--accent); }
+.switch[aria-checked="true"] i { transform: translateX(18px); }
+.switch:disabled { opacity: .5; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .switch, .switch i { transition: none; } }
 .seg { display: inline-flex; flex-wrap: wrap; gap: 4px; background: var(--surface2); padding: 4px; border-radius: 12px; }
 .seg button { border: 0; background: transparent; padding: 6px 12px; border-radius: 9px; }
 .seg button[aria-pressed="true"] { background: var(--surface); box-shadow: var(--shadow); font-weight: 600; }
@@ -178,10 +196,6 @@ main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
         <span class="muted">голосовое WhatsApp, запись встречи, mp3, m4a, ogg, wav</span>
         <button class="btn primary" id="pick">Выбрать файл</button>
       </div>
-      <div class="card">
-        <div class="settings-line" id="settings-line"></div>
-        <div class="settings" id="settings" hidden></div>
-      </div>
       <div class="card inbox">
         <h3>Голосовые в Загрузках</h3>
         <p class="hint" id="inbox-hint"></p>
@@ -199,6 +213,10 @@ main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
           <button data-v="mic" aria-pressed="true">Встреча — микрофон</button>
           <button data-v="both" aria-pressed="false">Созвон — микрофон и звук компьютера</button>
         </div>
+        <div class="switchrow">
+          <button class="switch" id="rec-split" role="switch" aria-checked="false" aria-labelledby="rec-split-l"><i></i></button>
+          <span><b id="rec-split-l">Разделять говорящих</b><small>Покажет, кто что сказал. Расшифровка после остановки будет примерно вдвое дольше.</small></span>
+        </div>
         <div class="timer num"><span class="dot"></span><span id="rec-time">0:00</span></div>
         <div class="meter" title="Громкость"><i id="rec-level"></i></div>
         <button class="btn primary recbtn" id="rec-btn">Начать запись</button>
@@ -206,7 +224,7 @@ main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
       </div>
       <div class="card live" id="live" hidden>
         <h3>Черновик по ходу записи</h3>
-        <p class="muted" id="live-note">Появляется кусками по 10 секунд. Итоговый текст после остановки будет точнее и с говорящими.</p>
+        <p class="muted" id="live-note">Появляется кусками по 10 секунд. Итоговый текст после остановки будет точнее.</p>
         <div id="live-text"></div>
       </div>
     </div>
@@ -251,6 +269,18 @@ main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
     <audio id="audio" preload="metadata"></audio>
   </div>
 </main>
+
+<div class="modal" id="dlg" hidden>
+  <div class="card dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+    <div><h2 id="dlg-title"></h2><div class="files num" id="dlg-files"></div></div>
+    <div class="switchrow">
+      <button class="switch" id="dlg-split" role="switch" aria-checked="false" aria-labelledby="dlg-split-l"><i></i></button>
+      <span><b id="dlg-split-l">Разделять говорящих</b><small>Покажет, кто что сказал, — для встреч, где это важно. Расшифровка будет примерно вдвое дольше.</small></span>
+    </div>
+    <div class="settings" id="dlg-settings"></div>
+    <div class="foot"><span class="muted num" id="dlg-est"></span><button class="btn" id="dlg-cancel">Отмена</button><button class="btn primary" id="dlg-go">Расшифровать</button></div>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -301,30 +331,54 @@ function renderList() {
 $('#list').addEventListener('click', e => { const r = e.target.closest('.row'); if (r) openItem(r.dataset.id); });
 $('#search').addEventListener('input', renderList);
 
-/* ---------- new ---------- */
-function renderSettings() {
-  const s = S.settings, o = S.options;
-  const name = (list, v) => (list.find(x => x[0] === v) || [v, v])[1];
-  $('#settings-line').innerHTML = `<span class="muted">Как расшифровывать:</span> <b>${esc(name(o.models, s.model))}</b> · <b>${esc(name(o.langs, s.language))}</b> · <b>${esc(name(o.speakers, s.speakers))}</b> <button class="btn quiet" id="set-toggle">${$('#settings').hidden ? 'Изменить' : 'Готово'}</button>`;
-  const seg = (key, list, hint) => `<div><label>${hint[0]}</label><div class="seg" data-key="${key}">${list.map(([v, n]) => `<button data-v="${esc(v)}" aria-pressed="${s[key] === v}">${esc(n)}</button>`).join('')}</div><small>${hint[1]}</small></div>`;
-  $('#settings').innerHTML =
-    seg('model', o.models, ['Качество', 'Быстрая — для голосовых и встреч. Точная — заметно дольше, когда важна каждая фраза.']) +
-    seg('language', o.langs, ['Язык', 'Если говорят на двух языках вперемешку — выберите «Русский и казахский».']) +
-    seg('speakers', o.speakers, ['Сколько человек говорит', 'Если знаете точно — укажите: разметка по людям будет точнее.']);
+/* ---------- new: the "how to transcribe" window ---------- */
+// files: [{path, name, duration}]; retryId: the item to transcribe again instead of new files.
+// The speaker switch starts off every time: most records are read for what was said, not who said it.
+let D = null;
+function askAdd(files, retryId) {
+  if (!files || !files.length) return;
+  const s = S.settings;
+  D = {files, retryId: retryId || null, split: false, model: s.model, language: s.language, speakers: s.speakers};
+  if (retryId && cur) Object.assign(D, {split: cur.split, model: cur.model || D.model, language: cur.language || D.language,
+                                        speakers: cur.split ? cur.speaker_count : D.speakers});
+  $('#dlg-title').textContent = retryId ? 'Расшифровать заново' : files.length === 1 ? 'Как расшифровать' : `Как расшифровать ${files.length} записи`;
+  const shown = files.slice(0, 5).map(f => `<div><span>${esc(f.name)}</span><span>${fmt(f.duration)}</span></div>`).join('');
+  $('#dlg-files').innerHTML = shown + (files.length > 5 ? `<div><span>и ещё ${files.length - 5}</span></div>` : '');
+  renderDlg(); $('#dlg').hidden = false; $('#dlg-go').focus();
 }
-$('#settings-line').addEventListener('click', e => { if (e.target.id === 'set-toggle') { $('#settings').hidden = !$('#settings').hidden; renderSettings(); } });
-$('#settings').addEventListener('click', async e => {
-  const b = e.target.closest('button'); if (!b) return;
-  const key = b.parentElement.dataset.key; S.settings[key] = b.dataset.v;
-  await call('setSettings', JSON.stringify(S.settings)); renderSettings();
+function renderDlg() {
+  const o = S.options;
+  $('#dlg-split').setAttribute('aria-checked', D.split);
+  const seg = (key, list, hint) => `<div><label>${hint[0]}</label><div class="seg" data-key="${key}">${list.map(([v, n]) => `<button data-v="${esc(v)}" aria-pressed="${D[key] === v}">${esc(n)}</button>`).join('')}</div><small>${hint[1]}</small></div>`;
+  $('#dlg-settings').innerHTML =
+    (D.split ? seg('speakers', o.speakers, ['Сколько человек говорит', 'Если знаете точно — укажите: разметка по людям будет точнее.']) : '') +
+    seg('model', o.models, ['Качество', 'Быстрая — для голосовых и встреч. Точная — заметно дольше, когда важна каждая фраза.']) +
+    seg('language', o.langs, ['Язык', 'Если говорят на двух языках вперемешку — выберите «Русский и казахский».']);
+  const k = (o.speed[D.model] || 2) * (D.split ? 1 : o.no_speakers_factor);
+  const total = D.files.reduce((t, f) => t + (f.duration || 0) * k + 25, 0);
+  $('#dlg-est').textContent = 'Займёт около ' + fmt(total);
+}
+function closeDlg() { $('#dlg').hidden = true; D = null; }
+$('#dlg-split').addEventListener('click', () => { D.split = !D.split; renderDlg(); });
+$('#dlg-settings').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; D[b.parentElement.dataset.key] = b.dataset.v; renderDlg(); });
+$('#dlg-cancel').addEventListener('click', closeDlg);
+$('#dlg').addEventListener('click', e => { if (e.target.id === 'dlg') closeDlg(); });
+$('#dlg').addEventListener('keydown', e => { if (e.key === 'Escape') closeDlg(); });
+$('#dlg-go').addEventListener('click', async () => {
+  const opts = {split: D.split, model: D.model, language: D.language, speakers: D.speakers}, retryId = D.retryId;
+  const paths = D.files.map(f => f.path);
+  closeDlg();
+  if (retryId) { await call('retry', retryId, JSON.stringify(opts)); toast('Поставлено в очередь'); await refresh(); openItem(retryId); return; }
+  const id = await call('addFiles', JSON.stringify({paths, ...opts}));
+  toast(paths.length > 1 ? `Поставлено в очередь: ${paths.length}` : 'Поставлено в очередь'); await refresh(); if (id) openItem(id);
 });
 function renderInbox() {
   const d = S.downloads;
   $('#inbox-hint').textContent = d.length ? 'Записи за последние 14 дней, которых ещё нет в истории.' : 'Новых голосовых нет — всё уже в истории.';
   $('#inbox').innerHTML = d.map(f => `<div class="file"><span class="fi">♪</span><span class="fn"><b title="${esc(f.name)}">${esc(f.name)}</b><span class="muted num">${esc(f.when)} · ${fmt(f.duration)}</span></span><button class="btn" data-path="${esc(f.path)}">Расшифровать</button></div>`).join('');
 }
-$('#inbox').addEventListener('click', async e => { const b = e.target.closest('button[data-path]'); if (!b) return; b.disabled = true; const id = await call('addFiles', JSON.stringify([b.dataset.path])); toast('Поставлено в очередь'); await refresh(); if (id) openItem(id); });
-$('#pick').addEventListener('click', async () => { const id = await call('pickFiles'); if (id) { toast('Поставлено в очередь'); await refresh(); openItem(id); } });
+$('#inbox').addEventListener('click', e => { const b = e.target.closest('button[data-path]'); if (!b) return; const f = S.downloads.find(x => x.path === b.dataset.path); if (f) askAdd([f]); });
+$('#pick').addEventListener('click', async () => askAdd(await call('pickFiles')));
 const drop = $('#drop');
 document.addEventListener('dragover', e => { e.preventDefault(); if (view !== 'new') show('new'); drop.classList.add('hot'); });
 document.addEventListener('dragleave', e => { if (!e.relatedTarget) drop.classList.remove('hot'); });
@@ -332,17 +386,18 @@ document.addEventListener('drop', async e => {
   e.preventDefault(); drop.classList.remove('hot');
   const uris = (e.dataTransfer.getData('text/uri-list') || '').split(/\r?\n/).filter(x => x.startsWith('file:'));
   if (!uris.length) { toast('Не удалось прочитать файл — нажмите «Выбрать файл»'); return; }
-  const id = await call('addUris', JSON.stringify(uris)); if (id) { toast('Поставлено в очередь'); await refresh(); openItem(id); }
+  askAdd(await call('describeUris', JSON.stringify(uris)));
 });
 $('#go-new').addEventListener('click', () => { curId = null; show('new'); });
 
 /* ---------- recorder ---------- */
-var recSource = 'mic', recOn = false;
+var recSource = 'mic', recOn = false, recSplit = false;
+$('#rec-split').addEventListener('click', () => { if (recOn) return; recSplit = !recSplit; $('#rec-split').setAttribute('aria-checked', recSplit); });
 $('#rec-source').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || recOn) return; recSource = b.dataset.v; for (const x of $('#rec-source').children) x.setAttribute('aria-pressed', x === b); });
 $('#go-rec').addEventListener('click', () => { curId = null; show('rec'); });
 $('#rec-btn').addEventListener('click', async () => {
   if (!recOn) {
-    const err = await call('recordStart', recSource);
+    const err = await call('recordStart', recSource, recSplit);
     if (err) { toast(err); return; }
     recOn = true; $('#live-text').innerHTML = ''; $('#live').hidden = false;
   } else {
@@ -361,6 +416,7 @@ function renderRec(sec, level) {
   $('#rec-btn').textContent = recOn ? 'Остановить и расшифровать' : 'Начать запись';
   $('#rec-btn').className = 'btn recbtn ' + (recOn ? 'danger' : 'primary');
   for (const x of $('#rec-source').children) x.disabled = recOn;
+  $('#rec-split').disabled = recOn;
 }
 
 /* ---------- item ---------- */
@@ -381,7 +437,7 @@ function setAudio() {
 function renderItem(full) {
   const i = cur;
   if (document.activeElement !== $('#it-title')) $('#it-title').textContent = i.title;
-  $('#it-meta').innerHTML = [i.created_text, fmt(i.duration), i.model_name, i.lang_name, i.took ? 'готово за ' + fmt(i.took) : '', i.origin === 'agent' ? 'добавил агент' : '']
+  $('#it-meta').innerHTML = [i.created_text, fmt(i.duration), i.model_name, i.lang_name, i.split ? 'по голосам' : '', i.took ? 'готово за ' + fmt(i.took) : '', i.origin === 'agent' ? 'добавил агент' : '']
     .filter(Boolean).map(esc).map(x => `<span>${x}</span>`).join('');
   const st = $('#it-status');
   st.hidden = i.status === 'done';
@@ -431,8 +487,9 @@ $('#it-more').addEventListener('click', e => { e.stopPropagation(); $('#it-menu'
 document.addEventListener('click', e => { if (!e.target.closest('#it-menu')) $('#it-menu').hidden = true; });
 $('#m-edit').addEventListener('click', () => call('openEditor', curId));
 $('#m-folder').addEventListener('click', () => call('openFolder', curId));
-$('#m-retry').addEventListener('click', async () => { await call('retry', curId); toast('Поставлено в очередь'); await refresh(); openItem(curId); });
-$('#it-status').addEventListener('click', async e => { if (e.target.id === 'st-retry') { await call('retry', curId); await refresh(); openItem(curId); } });
+const askRetry = () => cur && askAdd([{path: '', name: cur.title, duration: cur.duration}], curId);
+$('#m-retry').addEventListener('click', askRetry);
+$('#it-status').addEventListener('click', e => { if (e.target.id === 'st-retry') askRetry(); });
 let delArmed = false;
 $('#m-del').addEventListener('click', async e => {
   e.stopPropagation();
@@ -463,7 +520,7 @@ audio.addEventListener('timeupdate', () => {
   }
 });
 document.addEventListener('keydown', e => {
-  if (e.code === 'Space' && view === 'item' && !e.target.closest('input, [contenteditable="true"], button')) { e.preventDefault(); audio.paused ? audio.play() : audio.pause(); }
+  if (e.code === 'Space' && view === 'item' && $('#dlg').hidden && !e.target.closest('input, [contenteditable="true"], button')) { e.preventDefault(); audio.paused ? audio.play() : audio.pause(); }
 });
 
 /* ---------- sync with the app ---------- */
@@ -471,7 +528,7 @@ function lastEnd(i) { const p = (i && i.paragraphs) || []; return p.length ? p.l
 async function refresh() {
   S = await call('state');
   document.documentElement.dataset.theme = S.theme;
-  renderList(); renderSettings(); renderInbox();
+  renderList(); renderInbox();
   if (view === 'item' && curId) {
     const fresh = await call('item', curId);
     if (!fresh) { show('new'); return; }

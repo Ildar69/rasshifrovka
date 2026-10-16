@@ -34,18 +34,29 @@ BASE = Path(getattr(sys, '_MEIPASS', Path(__file__).parent))
 SETTINGS = rs.STORE / '.settings.json'
 TRASH = rs.STORE / 'Удалённые'
 
-SPEAKER_OPTIONS = [('auto', 'Определить само'), ('1', 'Один'), ('2', 'Двое'), ('3', 'Трое'),
-                   ('4', 'Четверо'), ('5', 'Пять'), ('none', 'Не разделять')]
+# Разделение по голосам — тумблер в окне добавления, по умолчанию выключен: оно съедает больше
+# половины времени (запись 1:18 — 35 минут только на голоса), а чаще нужно понять, что в записи,
+# а не кто что сказал. Здесь — сколько человек говорит, когда тумблер включён.
+SPEAKER_COUNTS = [('auto', 'Определить само'), ('2', 'Двое'), ('3', 'Трое'), ('4', 'Четверо'), ('5', 'Пять')]
 LANG_OPTIONS = [('ru', 'Русский'), ('kk', 'Казахский'), ('multilingual', 'Русский и казахский'),
                 ('auto', 'Определить само')]
 
 
 def load_settings():
+    """Model, language and the speaker count are remembered between additions; the speaker switch is not."""
     try:
         s = json.loads(SETTINGS.read_text(encoding='utf-8'))
     except Exception:
         s = {}
-    return {'model': s.get('model', 'fast'), 'language': s.get('language', 'ru'), 'speakers': s.get('speakers', 'auto')}
+    spk = str(s.get('speakers', 'auto'))
+    if spk not in dict(SPEAKER_COUNTS):  # 'none' and '1' from the old settings mean no split, not a count
+        spk = 'auto'
+    return {'model': s.get('model', 'fast'), 'language': s.get('language', 'ru'), 'speakers': spk}
+
+
+def item_options(settings, split=False):
+    return {'model': settings['model'], 'language': settings['language'],
+            'speakers': settings['speakers'] if split else 'none'}
 
 
 def theme_name():
@@ -90,7 +101,7 @@ class Api(QtCore.QObject):
     def item_dict(self, it, full=False):
         m = it.meta
         dur = m.get('duration') or 0
-        est = dur * rs.SPEED.get(m.get('model'), 2.0) + 25
+        est = rs.estimate(m)
         elapsed, progress, stage, left = 0, 0.0, '', est
         if it.status == 'running':
             elapsed = max(0.0, time.time() - rs.started_ts(it))
@@ -105,6 +116,8 @@ class Api(QtCore.QObject):
                 'created_text': f'{it.created:%d.%m.%Y, %H:%M}',
                 'model_name': 'модель ' + rs.model_title(m.get('model')).lower(),
                 'lang_name': dict(LANG_OPTIONS).get(m.get('language'), m.get('language', '')),
+                'split': str(m.get('speakers', 'auto')) != 'none', 'model': m.get('model'),
+                'language': m.get('language'), 'speaker_count': str(m.get('speakers', 'auto')),
                 'took': m.get('took'), 'origin': m.get('origin'), 'error': m.get('error', ''),
                 'elapsed': elapsed, 'estimate': est, 'left': left, 'stage': stage,
                 'interrupted': bool(m.get('interrupted')), 'ahead': self.queue_ahead(it),
@@ -153,7 +166,8 @@ class Api(QtCore.QObject):
             'downloads': self.downloads(),
             'settings': self.settings,
             'options': {'models': [(m, rs.model_title(m)) for m in rs.models()],
-                        'langs': LANG_OPTIONS, 'speakers': SPEAKER_OPTIONS},
+                        'langs': LANG_OPTIONS, 'speakers': SPEAKER_COUNTS,
+                        'speed': rs.SPEED, 'no_speakers_factor': rs.NO_SPEAKERS_FACTOR},
         }, ensure_ascii=False)
 
     @pyqtSlot(str, result=str)
@@ -170,32 +184,52 @@ class Api(QtCore.QObject):
         rs.STORE.mkdir(parents=True, exist_ok=True)
         SETTINGS.write_text(json.dumps(self.settings, ensure_ascii=False), encoding='utf-8')
 
-    def add_paths(self, paths):
-        last = None
+    # A chosen file is not queued at once: the page first shows how to transcribe it
+    # (speakers, quality, language) and queues it on "Расшифровать".
+    def describe(self, paths):
+        out = []
         for f in paths:
             p = Path(f)
             if not p.is_file() or p.suffix.lower() not in rs.AUDIO_EXT:
                 self.toast.emit(f'{p.name} — не аудиофайл, пропущен')
                 continue
-            last = rs.create_item(p, origin='app', **self.settings)
-        rs.ensure_worker()
-        self.changed.emit()
-        return last.id if last else ''
+            key = (str(p), p.stat().st_mtime)
+            if key not in self.dur_cache:
+                self.dur_cache[key] = rs.audio_duration(p)
+            out.append({'path': str(p), 'name': p.stem, 'duration': self.dur_cache[key]})
+        return json.dumps(out, ensure_ascii=False)
 
     @pyqtSlot(str, result=str)
-    def addFiles(self, js):
-        return self.add_paths(json.loads(js))
-
-    @pyqtSlot(str, result=str)
-    def addUris(self, js):
-        return self.add_paths([QtCore.QUrl(u).toLocalFile() for u in json.loads(js)])
+    def describeUris(self, js):
+        return self.describe([QtCore.QUrl(u).toLocalFile() for u in json.loads(js)])
 
     @pyqtSlot(result=str)
     def pickFiles(self):
         files, _ = QtWidgets.QFileDialog.getOpenFileNames(
             self.win, 'Выберите запись', str(rs.DOWNLOADS),
             'Аудио (' + ' '.join('*' + e for e in sorted(rs.AUDIO_EXT)) + ');;Все файлы (*.*)')
-        return self.add_paths(files) if files else ''
+        return self.describe(files)
+
+    def remember(self, opts):
+        keep = {k: opts[k] for k in ('model', 'language') if opts.get(k)}
+        if opts.get('split') and opts.get('speakers'):
+            keep['speakers'] = opts['speakers']
+        self.setSettings(json.dumps(keep))
+
+    @pyqtSlot(str, result=str)
+    def addFiles(self, js):
+        """{paths, split, model, language, speakers} -> id of the last queued item."""
+        d = json.loads(js)
+        self.remember(d)
+        opts = item_options(self.settings, bool(d.get('split')))
+        last = None
+        for f in d['paths']:
+            p = Path(f)
+            if p.is_file():
+                last = rs.create_item(p, origin='app', **opts)
+        rs.ensure_worker()
+        self.changed.emit()
+        return last.id if last else ''
 
     # ---------- item actions ----------
     def _item(self, iid):
@@ -231,9 +265,14 @@ class Api(QtCore.QObject):
     def openFolder(self, iid):
         os.startfile(str(rs.STORE / iid))
 
-    @pyqtSlot(str)
-    def retry(self, iid):
+    @pyqtSlot(str, str)
+    def retry(self, iid, js=''):
+        """Again, with the same settings or, from the "Расшифровать заново" window, with new ones."""
         it = self._item(iid)
+        if js:
+            d = json.loads(js)
+            self.remember(d)
+            it.meta.update(item_options(self.settings, bool(d.get('split'))))
         it.meta.update(status='queued', error='', attempts=0)
         it.meta.pop('interrupted', None)
         it.save()
@@ -288,7 +327,7 @@ class Api(QtCore.QObject):
             path = recorder.join_parts(d, out)
             if path:
                 rs.create_item(path, title=f'Восстановленная запись {when:%d.%m %H:%M}', origin='app',
-                               created=when, **self.settings)
+                               created=when, **item_options(self.settings))
                 n += 1
             shutil.rmtree(d, ignore_errors=True)
         if n:
@@ -296,12 +335,13 @@ class Api(QtCore.QObject):
                 'Найдена прерванная запись — она сохранена в истории и поставлена в расшифровку'))
         return n
 
-    @pyqtSlot(str, result=str)
-    def recordStart(self, source):
+    @pyqtSlot(str, bool, result=str)
+    def recordStart(self, source, split):
         import recorder
         now = dt.datetime.now()
         self.rec = recorder.Recorder(self.REC_ROOT / f'{now:%Y-%m-%d %H-%M-%S}', with_system=(source == 'both'))
         self.rec.source = source
+        self.rec.split = split
         self.rec.started_at = now
         self.rec.start()
         QtCore.QThread.msleep(500)
@@ -351,7 +391,7 @@ class Api(QtCore.QObject):
             return json.dumps({'error': 'Запись короче секунды — ничего не сохранено'})
         kind = 'Созвон' if rec.source == 'both' else 'Встреча'
         it = rs.create_item(path, title=f'{kind} {rec.started_at:%d.%m %H:%M}', origin='app',
-                            created=rec.started_at, **self.settings)
+                            created=rec.started_at, **item_options(self.settings, rec.split))
         shutil.rmtree(rec.dir, ignore_errors=True)  # only after the copy is safe in the store
         rs.ensure_worker()
         self.changed.emit()
@@ -387,10 +427,7 @@ class Main(QtWidgets.QMainWindow):
     def dropEvent(self, e):
         files = [u.toLocalFile() for u in e.mimeData().urls() if u.isLocalFile()]
         if files:
-            iid = self.api.add_paths(files)
-            if iid:
-                self.api.toast.emit('Поставлено в очередь')
-                self.view.page().runJavaScript(f'refresh().then(() => openItem({json.dumps(iid)}))')
+            self.view.page().runJavaScript(f'askAdd({self.api.describe(files)})')
 
     def closeEvent(self, e):
         if self.api.rec is not None:
