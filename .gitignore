@@ -11,3 +11,5 @@ dist/
 *.log
 engine/noScribeEdit/*
 !engine/noScribeEdit/readme.txt
+# служебный файл PyInstaller, build.ps1 создаёт его заново
+app/Rasshifrovka.spec
