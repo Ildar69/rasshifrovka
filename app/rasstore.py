@@ -303,7 +303,7 @@ def lock_release():
         pass
 
 
-def engine_command(item):
+def engine_command(item, folder=None):
     m = item.meta
     if FROM_SOURCE:
         import sys
@@ -313,9 +313,57 @@ def engine_command(item):
         head = [str(exe), '-m', 'noScribe']
     else:
         head = [str(NOSCRIBE_EXE)]
-    return head + [str(item.audio), str(item.html_path), '--no-gui',
+    folder = folder or item.folder
+    return head + [str(folder / item.audio.name), str(folder / item.html_path.name), '--no-gui',
             '--language', m.get('language', 'ru'), '--model', m.get('model', 'fast'),
             '--speaker-detection', str(m.get('speakers', 'auto'))]
+
+
+# The engine prints the file paths to its stdout, and the frozen exe writes stdout in the ANSI
+# code page (cp1251 here), ignoring PYTHONUTF8. A path with a letter outside it dies with
+# 'charmap' codec can't encode, exit 1 before any work: Kazakh Ә Қ Ң Ү Ө Ғ Ұ І Һ, and "й"
+# from an iPhone, which comes as и + U+0306 (checked 15.10.2026). Such an item is handed to
+# the engine through a junction with a Latin name; the files still land in the item folder.
+# Not in AppData: the Store Python redirects writes there into its own package folder,
+# and the engine would not see the link.
+RUN_LINK = Path.home() / '.rasshifrovka' / 'run'
+
+
+def _ansi_encoding():
+    import locale
+    try:
+        return locale.getencoding()  # 3.11+: the ANSI code page even in UTF-8 mode
+    except AttributeError:
+        return locale.getpreferredencoding(False)
+
+
+def _engine_can_print(path):
+    try:
+        str(path).encode(_ansi_encoding())
+        return True
+    except (UnicodeEncodeError, LookupError):
+        return False
+
+
+def _drop_run_link():
+    try:
+        os.rmdir(RUN_LINK)  # removes the junction itself, never what it points to
+    except OSError:
+        pass
+
+
+def engine_folder(item):
+    """The folder as the engine should see it: the item folder, or RUN_LINK pointing to it."""
+    if os.name != 'nt' or _engine_can_print(item.html_path):
+        return item.folder
+    try:
+        import _winapi
+        RUN_LINK.parent.mkdir(parents=True, exist_ok=True)
+        _drop_run_link()
+        _winapi.CreateJunction(str(item.folder), str(RUN_LINK))
+    except (OSError, ImportError, AttributeError):
+        return item.folder
+    return RUN_LINK if _engine_can_print(RUN_LINK) else item.folder
 
 
 def extra_prompt():
@@ -517,17 +565,22 @@ def run_item(item):
     except OSError:
         pass
     flags = 0x08000000 if os.name == 'nt' else 0  # CREATE_NO_WINDOW
-    p = subprocess.Popen(engine_command(item), cwd=str(NOSCRIBE_DIR), env=engine_env(),
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
-    canceled = False
-    while p.poll() is None:
-        lock_touch()
-        if not (item.folder / 'meta.json').exists() or _cancel_requested(item):
-            p.kill()
-            p.wait()
-            canceled = True
-            break
-        time.sleep(2)
+    folder = engine_folder(item)
+    try:
+        p = subprocess.Popen(engine_command(item, folder), cwd=str(NOSCRIBE_DIR), env=engine_env(),
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+        canceled = False
+        while p.poll() is None:
+            lock_touch()
+            if not (item.folder / 'meta.json').exists() or _cancel_requested(item):
+                p.kill()
+                p.wait()
+                canceled = True
+                break
+            time.sleep(2)
+    finally:
+        if folder != item.folder:
+            _drop_run_link()
     if not (item.folder / 'meta.json').exists():
         return
     item.reload()
