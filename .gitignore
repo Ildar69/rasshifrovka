@@ -9,3 +9,5 @@ engine/models/*/vocabulary.json
 build/
 dist/
 *.log
+engine/noScribeEdit/*
+!engine/noScribeEdit/readme.txt

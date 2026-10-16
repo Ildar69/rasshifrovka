@@ -22,19 +22,21 @@ from pathlib import Path
 
 STORE = Path(os.environ.get('RASSHIFROVKA_STORE', Path.home() / 'Documents' / 'Расшифровки'))
 
-# The engine (noScribe) runs either as a built exe or from source next to the app:
-#   repo/app/rasstore.py + repo/engine/noScribe  — after install.ps1, any computer
-#   RASSHIFROVKA_ENGINE=<folder with noScribe.exe> — a build of your own
+# The engine (noScribe) runs either from source next to the app or as a built exe:
+#   repo/app + repo/engine                    — after install.ps1, any computer
+#   engine_dir.txt next to Rasshifrovka.exe   — written by build.ps1 for an exe build
+#   RASSHIFROVKA_ENGINE=<folder with noScribe.exe> — overrides both
+import sys as _sys
 _HERE = Path(__file__).resolve().parent
 _ROOT = _HERE.parent
 _ENGINE_ENV = os.environ.get('RASSHIFROVKA_ENGINE', '')
-_LEGACY_EXE_DIR = Path.home() / 'Tools' / 'noScribe' / 'pyinstaller' / 'dist' / 'noScribe'
+_ENGINE_FILE = Path(_sys.executable).parent / 'engine_dir.txt' if getattr(_sys, 'frozen', False) else None
 if _ENGINE_ENV:
     NOSCRIBE_DIR = Path(_ENGINE_ENV)
-elif (_ROOT / 'engine' / 'noScribe' / '__main__.py').exists():
-    NOSCRIBE_DIR = _ROOT / 'engine'
+elif _ENGINE_FILE is not None and _ENGINE_FILE.exists():
+    NOSCRIBE_DIR = Path(_ENGINE_FILE.read_text(encoding='utf-8-sig').strip())
 else:
-    NOSCRIBE_DIR = _LEGACY_EXE_DIR
+    NOSCRIBE_DIR = _ROOT / 'engine'
 NOSCRIBE_EXE = NOSCRIBE_DIR / 'noScribe.exe'
 FROM_SOURCE = not NOSCRIBE_EXE.exists() and (NOSCRIBE_DIR / 'noScribe' / '__main__.py').exists()
 if FROM_SOURCE:
