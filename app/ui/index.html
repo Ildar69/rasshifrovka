@@ -255,7 +255,7 @@ main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
   <!-- empty -->
   <section class="page" id="p-empty" hidden>
-    <div class="wrap"><div class="pagehead"><h2>Выберите запись в истории</h2><p>Или начните новую: «Расшифровать запись» или «Записать разговор».</p></div></div>
+    <div class="wrap"><div class="pagehead"><h2>Выберите запись в истории</h2><p>Или начните новую: "Расшифровать запись" или "Записать разговор".</p></div></div>
   </section>
 
   <div class="player" id="player" hidden>
@@ -353,7 +353,7 @@ function renderDlg() {
   $('#dlg-settings').innerHTML =
     (D.split ? seg('speakers', o.speakers, ['Сколько человек говорит', 'Если знаете точно — укажите: разметка по людям будет точнее.']) : '') +
     seg('model', o.models, ['Качество', 'Быстрая — для голосовых и встреч. Точная — заметно дольше, когда важна каждая фраза.']) +
-    seg('language', o.langs, ['Язык', 'Если говорят на двух языках вперемешку — выберите «Русский и казахский».']);
+    seg('language', o.langs, ['Язык', 'Если говорят на двух языках вперемешку — выберите "Русский и казахский".']);
   const k = (o.speed[D.model] || 2) * (D.split ? 1 : o.no_speakers_factor);
   const total = D.files.reduce((t, f) => t + (f.duration || 0) * k + 25, 0);
   $('#dlg-est').textContent = 'Займёт около ' + fmt(total);
@@ -385,7 +385,7 @@ document.addEventListener('dragleave', e => { if (!e.relatedTarget) drop.classLi
 document.addEventListener('drop', async e => {
   e.preventDefault(); drop.classList.remove('hot');
   const uris = (e.dataTransfer.getData('text/uri-list') || '').split(/\r?\n/).filter(x => x.startsWith('file:'));
-  if (!uris.length) { toast('Не удалось прочитать файл — нажмите «Выбрать файл»'); return; }
+  if (!uris.length) { toast('Не удалось прочитать файл — нажмите "Выбрать файл"'); return; }
   askAdd(await call('describeUris', JSON.stringify(uris)));
 });
 $('#go-new').addEventListener('click', () => { curId = null; show('new'); });
@@ -495,7 +495,7 @@ $('#m-del').addEventListener('click', async e => {
   e.stopPropagation();
   if (!delArmed) { delArmed = true; e.target.textContent = 'Точно удалить? Нажмите ещё раз'; setTimeout(() => { delArmed = false; e.target.textContent = 'Удалить из истории'; }, 4000); return; }
   delArmed = false; $('#it-menu').hidden = true; $('#audio').pause();
-  await call('remove', curId); toast('Удалено. Файлы лежат в папке «Удалённые» хранилища'); curId = null; cur = null; await refresh(); show('new');
+  await call('remove', curId); toast('Удалено. Файлы лежат в папке "Удалённые" хранилища'); curId = null; cur = null; await refresh(); show('new');
 });
 
 /* ---------- player ---------- */
