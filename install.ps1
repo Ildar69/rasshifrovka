@@ -2,8 +2,9 @@
 # Запуск: правой кнопкой по файлу -> "Выполнить с помощью PowerShell",
 # или в PowerShell из папки программы:  powershell -ExecutionPolicy Bypass -File install.ps1
 #
-# Что делает: ставит библиотеки в папку .venv рядом с программой, скачивает модель
-# распознавания (~1,6 ГБ) и кладёт ярлык "Расшифровка" на рабочий стол.
+# Что делает: ставит библиотеки в папку .venv рядом с программой (с видеокартой NVIDIA —
+# и библиотеки для неё), скачивает модель распознавания (~1,6 ГБ) и кладёт ярлык
+# "Расшифровка" на рабочий стол. Повторный запуск безопасен: обновляет то, что изменилось.
 # Интернет нужен только здесь, на установке. Сама программа в сеть не ходит.
 
 $ErrorActionPreference = 'Stop'
@@ -26,8 +27,21 @@ if (-not (Test-Path "$Root\.venv\Scripts\python.exe")) { & $py[0] $py[1] -m venv
 $vpy = "$Root\.venv\Scripts\python.exe"
 & $vpy -m pip install --upgrade pip --quiet
 
-Step 'Ставлю torch для процессора (около 200 МБ)'
-& $vpy -m pip install --quiet --retries 10 --timeout 60 torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+# С видеокартой NVIDIA — сборка torch с CUDA: распознавание и разделение голосов идут на карте,
+# в разы быстрее (RTX 3050 Laptop: запись 16:51 — 22:30 на процессоре, 2:04 на карте).
+# Версия указана полностью (+cu126 / +cpu): иначе pip считает уже стоящую другую сборку подходящей
+# и при повторном запуске ничего не меняет.
+$gpu = $null
+if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+    try { $gpu = (& nvidia-smi --query-gpu=name --format=csv,noheader 2>$null | Select-Object -First 1) } catch {}
+}
+if ($gpu) {
+    Step "Нашёл видеокарту $gpu - ставлю torch с CUDA (около 2,5 ГБ)"
+    & $vpy -m pip install --quiet --no-cache-dir --retries 10 --timeout 60 torch==2.8.0+cu126 torchaudio==2.8.0+cu126 --index-url https://download.pytorch.org/whl/cu126
+} else {
+    Step 'Видеокарты NVIDIA нет - ставлю torch для процессора (около 200 МБ)'
+    & $vpy -m pip install --quiet --no-cache-dir --retries 10 --timeout 60 torch==2.8.0+cpu torchaudio==2.8.0+cpu --index-url https://download.pytorch.org/whl/cpu
+}
 
 Step 'Ставлю остальные библиотеки'
 & $vpy -m pip install --quiet --retries 10 --timeout 60 -r "$Root\requirements.txt"

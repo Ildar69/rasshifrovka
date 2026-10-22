@@ -59,6 +59,15 @@ STATUS_NAMES = {'queued': 'В очереди', 'running': 'Расшифровы�
 SPEED = {'fast': 1.6, 'precise': 3.0}
 # без разделения по голосам — примерно вдвое быстрее: замер 15.10.2026, 1,2–1,3 против 2,9 на коротких записях
 NO_SPEAKERS_FACTOR = 0.5
+# То же на видеокарте NVIDIA (RTX 3050 Laptop, 4 ГБ), замер 22.10.2026 на записи 16:51: с голосами
+# 2:04 (на процессоре Ryzen 5 5600H было 22:30), без голосов 0:48–0:51. "Быстрая" и "Точная" на карте
+# почти равны; голоса — три четверти времени
+GPU_SPEED = {'fast': 0.1, 'precise': 0.1}
+GPU_NO_SPEAKERS_FACTOR = 0.25
+
+# Чем считать. 'auto' — тяжёлая часть (распознавание и голоса) на видеокарте NVIDIA, если она есть,
+# остальное на процессоре; 'cpu' — всё на процессоре. Движок получает выбор в RASSHIFROVKA_DEVICE.
+DEVICES = [('auto', 'Видеокарта и процессор'), ('cpu', 'Только процессор')]
 
 OFFLINE_ENV = {'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1',
                'HF_HUB_DISABLE_TELEMETRY': '1', 'PYANNOTE_METRICS_ENABLED': '0'}
@@ -90,6 +99,48 @@ def models():
 
 def model_title(name):
     return MODEL_NAMES.get(name, name)
+
+
+_gpu = None
+
+
+def gpu():
+    """{'name': the NVIDIA card or '', 'ready': the engine has the CUDA libraries to use it}.
+    The card is asked through nvidia-smi, which comes with the driver; the libraries are
+    the CUDA build of torch that install.ps1 puts in when it finds a card."""
+    global _gpu
+    if _gpu is None:
+        name = ''
+        try:
+            r = subprocess.run(['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'], capture_output=True,
+                               text=True, timeout=10, creationflags=0x08000000 if os.name == 'nt' else 0)
+            if r.returncode == 0:
+                name = r.stdout.strip().splitlines()[0].strip() if r.stdout.strip() else ''
+        except (OSError, subprocess.SubprocessError):
+            pass
+        lib = None
+        if FROM_SOURCE:
+            import importlib.util
+            spec = importlib.util.find_spec('torch')  # finds the package without loading it
+            if spec is not None and spec.origin:
+                lib = Path(spec.origin).parent / 'lib'
+        else:
+            lib = NOSCRIBE_DIR / '_internal' / 'torch' / 'lib'
+        ready = bool(lib is not None and lib.is_dir() and any(lib.glob('cudnn*')))
+        _gpu = {'name': name, 'ready': bool(name) and ready}
+    return _gpu
+
+
+def on_gpu(meta):
+    """Whether this item is computed on the card: asked for and possible on this computer."""
+    return meta.get('device', 'auto') != 'cpu' and gpu()['ready']
+
+
+def speed_factor(model, split, gpu_used):
+    """Seconds of work per second of recording."""
+    if gpu_used:
+        return GPU_SPEED.get(model, 0.3) * (1 if split else GPU_NO_SPEAKERS_FACTOR)
+    return SPEED.get(model, 2.0) * (1 if split else NO_SPEAKERS_FACTOR)
 
 
 def safe_name(s):
@@ -230,7 +281,8 @@ def items():
     return sorted(out, key=lambda i: i.created, reverse=True)
 
 
-def create_item(src, title=None, model='fast', language='ru', speakers='auto', origin='app', created=None):
+def create_item(src, title=None, model='fast', language='ru', speakers='auto', origin='app', created=None,
+                device='auto'):
     src = Path(src)
     STORE.mkdir(parents=True, exist_ok=True)
     created = created or dt.datetime.now()
@@ -245,7 +297,7 @@ def create_item(src, title=None, model='fast', language='ru', speakers='auto', o
     meta = {'title': title, 'created': created.isoformat(timespec='seconds'),
             'source': str(src), 'source_size': src.stat().st_size, 'audio': audio_name,
             'duration': audio_duration(folder / audio_name), 'model': model, 'language': language,
-            'speakers': speakers, 'status': 'queued', 'origin': origin, 'speaker_names': {}}
+            'speakers': speakers, 'device': device, 'status': 'queued', 'origin': origin, 'speaker_names': {}}
     (folder / 'meta.json').write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding='utf-8')
     return Item(folder)
 
@@ -377,8 +429,10 @@ def extra_prompt():
         return ''
 
 
-def engine_env():
-    return dict(os.environ, **OFFLINE_ENV, RASSHIFROVKA_EXTRA_PROMPT=extra_prompt())
+def engine_env(item=None):
+    device = item.meta.get('device', 'auto') if item is not None else 'auto'
+    return dict(os.environ, **OFFLINE_ENV, RASSHIFROVKA_EXTRA_PROMPT=extra_prompt(),
+                RASSHIFROVKA_DEVICE='cpu' if device == 'cpu' else 'auto')
 
 
 def engine_ready():
@@ -557,7 +611,8 @@ def run_worker():
 
 def run_item(item):
     item.meta.update(status='running', started=dt.datetime.now().isoformat(timespec='seconds'), error='',
-                     attempts=item.meta.get('attempts', 0) + 1, worker_pid=os.getpid())
+                     attempts=item.meta.get('attempts', 0) + 1, worker_pid=os.getpid(),
+                     computed_on='gpu' if on_gpu(item.meta) else 'cpu')
     item.save()
     if not engine_ready():
         item.meta.update(status='error', error=f'не найден движок расшифровки в {NOSCRIBE_DIR} — запустите install.ps1')
@@ -571,7 +626,7 @@ def run_item(item):
     flags = 0x08000000 if os.name == 'nt' else 0  # CREATE_NO_WINDOW
     folder = engine_folder(item)
     try:
-        p = subprocess.Popen(engine_command(item, folder), cwd=str(NOSCRIBE_DIR), env=engine_env(),
+        p = subprocess.Popen(engine_command(item, folder), cwd=str(NOSCRIBE_DIR), env=engine_env(item),
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
         canceled = False
         while p.poll() is None:
@@ -654,9 +709,7 @@ def time_left(item):
 
 def estimate(meta):
     """Seconds of work expected for an item, before anything is measured; 25 s is loading the model."""
-    k = SPEED.get(meta.get('model'), 2.0)
-    if str(meta.get('speakers', 'auto')) == 'none':
-        k *= NO_SPEAKERS_FACTOR
+    k = speed_factor(meta.get('model'), str(meta.get('speakers', 'auto')) != 'none', on_gpu(meta))
     return (meta.get('duration') or 0) * k + 25
 
 

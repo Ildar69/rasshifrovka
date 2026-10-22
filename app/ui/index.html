@@ -338,7 +338,7 @@ let D = null;
 function askAdd(files, retryId) {
   if (!files || !files.length) return;
   const s = S.settings;
-  D = {files, retryId: retryId || null, split: false, model: s.model, language: s.language, speakers: s.speakers};
+  D = {files, retryId: retryId || null, split: false, model: s.model, language: s.language, speakers: s.speakers, device: s.device || 'auto'};
   if (retryId && cur) Object.assign(D, {split: cur.split, model: cur.model || D.model, language: cur.language || D.language,
                                         speakers: cur.split ? cur.speaker_count : D.speakers});
   $('#dlg-title').textContent = retryId ? 'Расшифровать заново' : files.length === 1 ? 'Как расшифровать' : `Как расшифровать ${files.length} записи`;
@@ -353,10 +353,18 @@ function renderDlg() {
   $('#dlg-settings').innerHTML =
     (D.split ? seg('speakers', o.speakers, ['Сколько человек говорит', 'Если знаете точно — укажите: разметка по людям будет точнее.']) : '') +
     seg('model', o.models, ['Качество', 'Быстрая — для голосовых и встреч. Точная — заметно дольше, когда важна каждая фраза.']) +
-    seg('language', o.langs, ['Язык', 'Если говорят на двух языках вперемешку — выберите "Русский и казахский".']);
-  const k = (o.speed[D.model] || 2) * (D.split ? 1 : o.no_speakers_factor);
+    seg('language', o.langs, ['Язык', 'Если говорят на двух языках вперемешку — выберите "Русский и казахский".']) +
+    deviceBlock(o.gpu);
+  const k = ((o.speed[D.device] || {})[D.model] || [1, 2])[D.split ? 1 : 0];
   const total = D.files.reduce((t, f) => t + (f.duration || 0) * k + 25, 0);
   $('#dlg-est').textContent = 'Займёт около ' + fmt(total);
+}
+// The device choice is shown only where there is an NVIDIA card; without one everything runs on the processor anyway.
+function deviceBlock(g) {
+  if (!g || !g.name) return '';
+  if (!g.ready) return `<div><label>Чем считать</label><small class="muted">Видеокарта ${esc(g.name)} есть, но программа её пока не использует. Запустите install.ps1 ещё раз — он поставит нужные библиотеки (около 3 ГБ), и расшифровка пойдёт в несколько раз быстрее.</small></div>`;
+  return `<div><label>Чем считать</label><div class="seg" data-key="device">${S.options.devices.map(([v, n]) => `<button data-v="${esc(v)}" aria-pressed="${D.device === v}">${esc(n)}</button>`).join('')}</div>`
+    + `<small>${D.device === 'cpu' ? 'Всё на процессоре — в несколько раз дольше. Пригодится, если видеокарта занята, например игрой.' : `Распознавание и разделение голосов — на видеокарте ${esc(g.name)}, подготовка звука и сборка текста — на процессоре. Самый быстрый вариант.`}</small></div>`;
 }
 function closeDlg() { $('#dlg').hidden = true; D = null; }
 $('#dlg-split').addEventListener('click', () => { D.split = !D.split; renderDlg(); });
@@ -365,7 +373,7 @@ $('#dlg-cancel').addEventListener('click', closeDlg);
 $('#dlg').addEventListener('click', e => { if (e.target.id === 'dlg') closeDlg(); });
 $('#dlg').addEventListener('keydown', e => { if (e.key === 'Escape') closeDlg(); });
 $('#dlg-go').addEventListener('click', async () => {
-  const opts = {split: D.split, model: D.model, language: D.language, speakers: D.speakers}, retryId = D.retryId;
+  const opts = {split: D.split, model: D.model, language: D.language, speakers: D.speakers, device: D.device}, retryId = D.retryId;
   const paths = D.files.map(f => f.path);
   closeDlg();
   if (retryId) { await call('retry', retryId, JSON.stringify(opts)); toast('Поставлено в очередь'); await refresh(); openItem(retryId); return; }
@@ -437,7 +445,7 @@ function setAudio() {
 function renderItem(full) {
   const i = cur;
   if (document.activeElement !== $('#it-title')) $('#it-title').textContent = i.title;
-  $('#it-meta').innerHTML = [i.created_text, fmt(i.duration), i.model_name, i.lang_name, i.split ? 'по голосам' : '', i.took ? 'готово за ' + fmt(i.took) : '', i.origin === 'agent' ? 'добавил агент' : '']
+  $('#it-meta').innerHTML = [i.created_text, fmt(i.duration), i.model_name, i.lang_name, i.split ? 'по голосам' : '', i.took ? 'готово за ' + fmt(i.took) : '', i.status === 'queued' ? '' : i.device_name, i.origin === 'agent' ? 'добавил агент' : '']
     .filter(Boolean).map(esc).map(x => `<span>${x}</span>`).join('');
   const st = $('#it-status');
   st.hidden = i.status === 'done';

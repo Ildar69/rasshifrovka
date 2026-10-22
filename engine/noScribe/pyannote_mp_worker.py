@@ -82,6 +82,28 @@ def hide_speechbrain():
             sys.modules["speechbrain"] = previous_speechbrain
 
 
+def pad_last_embedding_batch(pipeline):
+    """Ildar 22.10.2026: on an NVIDIA card the speaker embeddings of a 2-minute
+    recording took 56 s, though one batch of 32 is 0.6 s. The last batch is
+    shorter (16 here), and cuDNN spends ~50 s choosing kernels for the new
+    shape. The last batch is filled up to the full size with silence and the
+    extra rows are dropped: the embeddings come out the same, the stage 7.7 s.
+    """
+    import torch
+    emb, size = pipeline._embedding, pipeline.embedding_batch_size
+    base = type(emb)
+
+    def padded_call(self, waveforms, masks=None):
+        n = waveforms.shape[0]
+        if n < size:
+            waveforms = torch.cat([waveforms, waveforms.new_zeros((size - n, *waveforms.shape[1:]))])
+            if masks is not None:
+                masks = torch.cat([masks, masks.new_ones((size - n, *masks.shape[1:]))])
+        return base.__call__(self, waveforms, masks=masks)[:n]
+
+    emb.__class__ = type(base.__name__, (base,), {'__call__': padded_call})
+
+
 def pyannote_proc_entrypoint(args: dict, q):
     """Runs diarization in a child process and streams progress/logs.
     Messages:
@@ -171,6 +193,9 @@ def pyannote_proc_entrypoint(args: dict, q):
             pipeline = Pipeline.from_pretrained(mypath)
         waveform, sample_rate = load_waveform(audio_file)
         pipeline.to(torch.device(device))
+        plog("info", f"pyannote device: {device}")
+        if device == 'cuda':
+            pad_last_embedding_batch(pipeline)
 
         seg_list = []
         with SimpleProgressHook() as hook:

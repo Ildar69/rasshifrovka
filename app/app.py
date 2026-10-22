@@ -43,7 +43,7 @@ LANG_OPTIONS = [('ru', 'Русский'), ('kk', 'Казахский'), ('multil
 
 
 def load_settings():
-    """Model, language and the speaker count are remembered between additions; the speaker switch is not."""
+    """Model, language, the speaker count and the device are remembered between additions; the speaker switch is not."""
     try:
         s = json.loads(SETTINGS.read_text(encoding='utf-8'))
     except Exception:
@@ -51,12 +51,22 @@ def load_settings():
     spk = str(s.get('speakers', 'auto'))
     if spk not in dict(SPEAKER_COUNTS):  # 'none' and '1' from the old settings mean no split, not a count
         spk = 'auto'
-    return {'model': s.get('model', 'fast'), 'language': s.get('language', 'ru'), 'speakers': spk}
+    device = s.get('device', 'auto')
+    if device not in dict(rs.DEVICES):
+        device = 'auto'
+    return {'model': s.get('model', 'fast'), 'language': s.get('language', 'ru'), 'speakers': spk, 'device': device}
 
 
 def item_options(settings, split=False):
     return {'model': settings['model'], 'language': settings['language'],
-            'speakers': settings['speakers'] if split else 'none'}
+            'speakers': settings['speakers'] if split else 'none', 'device': settings['device']}
+
+
+def speed_table():
+    """{device: {model: [without speakers, with speakers]}} — for the estimate in the "how to transcribe" window."""
+    ready = rs.gpu()['ready']
+    return {d: {m: [rs.speed_factor(m, split, ready and d != 'cpu') for split in (False, True)] for m in rs.models()}
+            for d, _ in rs.DEVICES}
 
 
 def theme_name():
@@ -115,6 +125,8 @@ class Api(QtCore.QObject):
             d.update({
                 'created_text': f'{it.created:%d.%m.%Y, %H:%M}',
                 'model_name': 'модель ' + rs.model_title(m.get('model')).lower(),
+                'device_name': {'gpu': 'на видеокарте', 'cpu': 'на процессоре'}.get(m.get('computed_on'), ''),
+                'device': m.get('device', 'auto'),
                 'lang_name': dict(LANG_OPTIONS).get(m.get('language'), m.get('language', '')),
                 'split': str(m.get('speakers', 'auto')) != 'none', 'model': m.get('model'),
                 'language': m.get('language'), 'speaker_count': str(m.get('speakers', 'auto')),
@@ -167,7 +179,7 @@ class Api(QtCore.QObject):
             'settings': self.settings,
             'options': {'models': [(m, rs.model_title(m)) for m in rs.models()],
                         'langs': LANG_OPTIONS, 'speakers': SPEAKER_COUNTS,
-                        'speed': rs.SPEED, 'no_speakers_factor': rs.NO_SPEAKERS_FACTOR},
+                        'devices': rs.DEVICES, 'gpu': rs.gpu(), 'speed': speed_table()},
         }, ensure_ascii=False)
 
     @pyqtSlot(str, result=str)
@@ -211,7 +223,7 @@ class Api(QtCore.QObject):
         return self.describe(files)
 
     def remember(self, opts):
-        keep = {k: opts[k] for k in ('model', 'language') if opts.get(k)}
+        keep = {k: opts[k] for k in ('model', 'language', 'device') if opts.get(k)}
         if opts.get('split') and opts.get('speakers'):
             keep['speakers'] = opts['speakers']
         self.setSettings(json.dumps(keep))

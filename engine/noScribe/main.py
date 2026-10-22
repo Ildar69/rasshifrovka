@@ -221,6 +221,12 @@ def get_config_flag(key: str, default: bool) -> bool:
 force_pyannote_cpu = get_config_flag('force_pyannote_cpu', False)
 force_whisper_cpu = get_config_flag('force_whisper_cpu', False)
 
+# Ildar: the window says what to compute on: RASSHIFROVKA_DEVICE = auto (the NVIDIA card when
+# there is one) or cpu. Only for this run: nothing goes to config.yml.
+RASSHIFROVKA_DEVICE = os.environ.get('RASSHIFROVKA_DEVICE', '').strip().lower()
+if RASSHIFROVKA_DEVICE in ('auto', 'cpu'):  # the window's choice outranks a force_*_cpu left in config.yml
+    force_pyannote_cpu = force_whisper_cpu = RASSHIFROVKA_DEVICE == 'cpu'
+
 _CUDA_ERROR_KEYWORDS = (
     'cuda',
     'cublas',
@@ -3371,6 +3377,17 @@ class App(ctk.CTk):
         global force_whisper_cpu
         message = str(error).strip()
         if not _is_cuda_error_message(message):
+            return False
+
+        # Ildar: run by the window, nobody is there to answer a dialog; the card failed,
+        # so this run goes on on the processor, and the next one tries the card again
+        if RASSHIFROVKA_DEVICE:
+            if component == 'pyannote' and not force_pyannote_cpu:
+                force_pyannote_cpu = True
+                return True
+            if component == 'whisper' and not force_whisper_cpu:
+                force_whisper_cpu = True
+                return True
             return False
 
         if component == 'pyannote':

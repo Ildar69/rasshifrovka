@@ -81,6 +81,10 @@ def whisper_proc_entrypoint(args: dict, q):
         if os.path.exists(ct_file):
             with open(ct_file, encoding="utf-8") as f:
                 compute_type = f.read().strip() or compute_type
+        # Ildar: on an NVIDIA card int8 weights are multiplied in float16 - the card's own type
+        if device == 'cuda' and compute_type == 'int8':
+            compute_type = 'int8_float16'
+        plog("info", f"whisper device: {device}, compute type: {compute_type}")
         model = WhisperModel(
             str(args["whisper_model"].path),
             device=device,
