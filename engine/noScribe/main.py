@@ -87,6 +87,15 @@ if sys.stdout is None:
 if sys.stderr is None:
     sys.stderr = open(os.devnull, "w")
 
+# Ildar: run by the window there is no console, so stdout writes in the ANSI code page (cp1251
+# here) and print() raises on any letter outside it. Whisper's text goes through print(), so
+# one Kazakh letter or a stray 下去 stopped the whole run with exit 1 (checked 04.11.2026).
+# What cannot be printed is only a matter for the console; the transcript is written separately.
+try:
+    sys.stdout.reconfigure(errors="backslashreplace")
+except AttributeError:
+    pass
+
  # Pyinstaller fix, used to open multiple instances on Mac
 mp.freeze_support()
 

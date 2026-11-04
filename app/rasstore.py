@@ -75,6 +75,7 @@ OFFLINE_ENV = {'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1',
 LOCK = STORE / '.engine.lock'
 LOCK_STALE_SEC = 90
 CANCEL = STORE / '.cancel'
+ENGINE_OUT = STORE / '.engine.out'
 # noScribe names its log after the transcript file; ours is always transcript.html
 ENGINE_LOG = Path(os.environ.get('LOCALAPPDATA', '')) / 'noScribe' / 'noScribe' / 'log' / 'transcript.log'
 # a run cut off by a crash is started again by itself; after this many tries it stops with an error
@@ -238,6 +239,10 @@ class Item:
             spk = html.unescape(spk).strip() or '—'
             if text.startswith(spk + ':'):
                 text = text[len(spk) + 1:].strip()
+            # the engine marks overlapping speech: "//S01: ..." opens it, "//" closes it. It is
+            # the same person, not one more speaker, and the marks are not words.
+            spk = spk.removeprefix('//')
+            text = text.removeprefix('//').removesuffix('//').strip()
             if not text or PAUSE.match(text):
                 continue
             start, end = int(start), int(end)
@@ -611,7 +616,7 @@ def run_worker():
 
 def run_item(item):
     item.meta.update(status='running', started=dt.datetime.now().isoformat(timespec='seconds'), error='',
-                     attempts=item.meta.get('attempts', 0) + 1, worker_pid=os.getpid(),
+                     error_detail='', attempts=item.meta.get('attempts', 0) + 1, worker_pid=os.getpid(),
                      computed_on='gpu' if on_gpu(item.meta) else 'cpu')
     item.save()
     if not engine_ready():
@@ -626,20 +631,22 @@ def run_item(item):
     flags = 0x08000000 if os.name == 'nt' else 0  # CREATE_NO_WINDOW
     folder = engine_folder(item)
     try:
-        p = subprocess.Popen(engine_command(item, folder), cwd=str(NOSCRIBE_DIR), env=engine_env(item),
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
-        canceled = False
-        while p.poll() is None:
-            lock_touch()
-            if not (item.folder / 'meta.json').exists() or _cancel_requested(item):
-                p.kill()
-                p.wait()
-                canceled = True
-                break
-            time.sleep(2)
+        with open(ENGINE_OUT, 'wb') as out:
+            p = subprocess.Popen(engine_command(item, folder), cwd=str(NOSCRIBE_DIR), env=engine_env(item),
+                                 stdout=out, stderr=subprocess.STDOUT, creationflags=flags)
+            canceled = False
+            while p.poll() is None:
+                lock_touch()
+                if not (item.folder / 'meta.json').exists() or _cancel_requested(item):
+                    p.kill()
+                    p.wait()
+                    canceled = True
+                    break
+                time.sleep(2)
     finally:
         if folder != item.folder:
             _drop_run_link()
+    detail = _engine_output_tail()
     if not (item.folder / 'meta.json').exists():
         return
     item.reload()
@@ -651,9 +658,28 @@ def run_item(item):
         item.write_md()
         return
     else:
-        item.meta.update(status='error', error=f'Движок остановился (код {p.returncode}). Попробуйте ещё раз; '
-                                               'если повторится — запись, возможно, повреждена.')
+        reason = detail.splitlines()[-1].strip()[:300] if detail else ''
+        item.meta.update(status='error', error_detail=detail,
+                         error=f'Движок остановился (код {p.returncode}). Попробуйте ещё раз. ' +
+                               (f'Причина: {reason}' if reason else
+                                'Если повторится — запись, возможно, повреждена.'))
     item.save()
+
+
+def _engine_output_tail(limit=4000):
+    """The end of what the engine printed, and the output file gone: the traceback of a failed
+    run is only there, the engine has closed its own log by then. The file also holds the text
+    of the recording, so it does not stay around."""
+    try:
+        raw = ENGINE_OUT.read_bytes()[-limit:]
+        ENGINE_OUT.unlink()
+    except OSError:
+        return ''
+    raw = raw[raw.find(b'\n') + 1:]  # the cut may have landed inside a letter
+    try:  # the ANSI code page, unless this computer has PYTHONUTF8 set
+        return raw.decode('utf-8').strip()
+    except UnicodeDecodeError:
+        return raw.decode(_ansi_encoding(), 'replace').strip()
 
 
 def progress(item):
