@@ -291,7 +291,7 @@ def create_item(src, title=None, model='fast', language='ru', speakers='auto', o
     src = Path(src)
     STORE.mkdir(parents=True, exist_ok=True)
     created = created or dt.datetime.now()
-    title = title or src.stem
+    title = title or clean_title(src.name)
     base = f'{created:%Y-%m-%d %H-%M} {safe_name(title)}'
     folder, n = STORE / base, 2
     while folder.exists():
@@ -314,6 +314,82 @@ def known_sources():
         if s:
             out.add((os.path.basename(s).lower(), it.meta.get('source_size')))
     return out
+
+
+def clean_title(name):
+    """"Запись.m4a.mp4" -> "Запись": a messenger adds its extension on top of the one in the name."""
+    stem = Path(name).stem
+    while Path(stem).suffix.lower() in AUDIO_EXT and Path(stem).stem:
+        stem = Path(stem).stem
+    return stem
+
+
+# Folders whose new recordings are queued by themselves. A file counts as new if it was not there
+# when the folder was added or switched on, and it is taken once its size stopped changing: a cloud
+# or a messenger may still be writing it.
+WATCH_FILE = STORE / 'watch.json'
+WATCH_SETTLE_SEC = 15
+
+
+def load_watch():
+    try:
+        rows = json.loads(WATCH_FILE.read_text(encoding='utf-8'))
+        return rows if isinstance(rows, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def save_watch(rows):
+    STORE.mkdir(parents=True, exist_ok=True)
+    tmp = WATCH_FILE.with_suffix('.tmp')
+    tmp.write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding='utf-8')
+    tmp.replace(WATCH_FILE)
+
+
+def watch_audio(folder):
+    """Audio files right in the folder, without subfolders and half-written service files."""
+    out = []
+    for p in Path(folder).iterdir():
+        if p.is_file() and p.suffix.lower() in AUDIO_EXT and p.name[0] not in '.~':
+            out.append(p)
+    return out
+
+
+def watch_snapshot(folder):
+    """What is in the folder now: [name, size] pairs; these are not touched."""
+    out = []
+    try:
+        for p in watch_audio(folder):
+            out.append([p.name.lower(), p.stat().st_size])
+    except OSError:
+        pass
+    return out
+
+
+def watch_ready(row, sizes, now=None):
+    """New files of this folder whose size has settled. sizes: {path: (size, since)}, kept by the caller."""
+    now = now or time.time()
+    seen = {tuple(x) for x in row.get('seen', [])}
+    ready = []
+    try:
+        files = watch_audio(row['path'])
+    except OSError:
+        return []
+    for p in sorted(files, key=lambda f: f.name):
+        try:
+            size = p.stat().st_size
+        except OSError:
+            continue
+        key = str(p)
+        if not size or (p.name.lower(), size) in seen:
+            sizes.pop(key, None)
+            continue
+        was = sizes.get(key)
+        if was is None or was[0] != size:
+            sizes[key] = (size, now)
+        elif now - was[1] >= WATCH_SETTLE_SEC:
+            ready.append(p)
+    return ready
 
 
 def new_in_downloads(days=14):
@@ -638,7 +714,8 @@ def run_item(item):
             while p.poll() is None:
                 lock_touch()
                 if not (item.folder / 'meta.json').exists() or _cancel_requested(item):
-                    p.kill()
+                    # the exe is a launcher with the engine as its child: killing only it leaves the engine running
+                    subprocess.run(['taskkill', '/PID', str(p.pid), '/T', '/F'], capture_output=True, creationflags=flags) if os.name == 'nt' else p.kill()
                     p.wait()
                     canceled = True
                     break

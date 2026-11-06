@@ -99,6 +99,11 @@ class Api(QtCore.QObject):
         self.rec = None
         self.live = None
         self.live_pos = 0.0
+        self.watch = rs.load_watch()
+        self.watch_sizes = {}
+        self.watch_lock = threading.Lock()
+        self.watch_running = False
+        self.watch_last = 0.0
         self.recover_recordings()
         rs.ensure_worker()
         self.timer = QtCore.QTimer(self)
@@ -176,6 +181,7 @@ class Api(QtCore.QObject):
             'theme': theme_name(),
             'items': [self.item_dict(i) for i in rs.items()],
             'downloads': self.downloads(),
+            'watch': self.watch_public(),
             'settings': self.settings,
             'options': {'models': [(m, rs.model_title(m)) for m in rs.models()],
                         'langs': LANG_OPTIONS, 'speakers': SPEAKER_COUNTS,
@@ -243,6 +249,85 @@ class Api(QtCore.QObject):
         self.changed.emit()
         return last.id if last else ''
 
+    # ---------- folders with automatic transcription ----------
+    def watch_public(self):
+        with self.watch_lock:
+            return [{'path': r['path'], 'name': Path(r['path']).name or r['path'], 'auto': bool(r.get('auto')),
+                     'model': r.get('model', 'fast'), 'language': r.get('language', 'ru'),
+                     'speakers': r.get('speakers', 'none'), 'exists': os.path.isdir(r['path'])}
+                    for r in self.watch]
+
+    @pyqtSlot()
+    def watchAdd(self):
+        path = QtWidgets.QFileDialog.getExistingDirectory(self.win, 'Папка с записями', str(rs.DOWNLOADS))
+        if not path:
+            return
+        path = str(Path(path))
+        with self.watch_lock:
+            if any(r['path'] == path for r in self.watch):
+                self.toast.emit('Эта папка уже добавлена')
+                return
+            self.watch.append({'path': path, 'auto': True, 'model': 'fast', 'language': 'ru', 'speakers': 'none',
+                               'seen': rs.watch_snapshot(path)})
+            rs.save_watch(self.watch)
+        self.changed.emit()
+
+    @pyqtSlot(str)
+    def watchSet(self, js):
+        d = json.loads(js)
+        with self.watch_lock:
+            for r in self.watch:
+                if r['path'] == d.get('path'):
+                    if d.get('auto') and not r.get('auto'):  # what piled up while it was off is not touched
+                        r['seen'] = rs.watch_snapshot(r['path'])
+                    r.update({k: d[k] for k in ('auto', 'model', 'language', 'speakers') if k in d})
+            rs.save_watch(self.watch)
+        self.changed.emit()
+
+    @pyqtSlot(str)
+    def watchRemove(self, path):
+        with self.watch_lock:
+            self.watch = [r for r in self.watch if r['path'] != path]
+            rs.save_watch(self.watch)
+        self.changed.emit()
+
+    def watch_tick(self):
+        now = time.time()
+        if self.watch_running or now - self.watch_last < 5 or not any(r.get('auto') for r in self.watch):
+            return
+        self.watch_last = now
+        self.watch_running = True
+        threading.Thread(target=self._watch_scan, daemon=True).start()  # a cloud folder may be slow
+
+    def _watch_scan(self):
+        try:
+            with self.watch_lock:
+                rows = [dict(r) for r in self.watch if r.get('auto')]
+            added = 0
+            for row in rows:
+                for p in rs.watch_ready(row, self.watch_sizes):
+                    opts = {'model': row.get('model', 'fast'), 'language': row.get('language', 'ru'),
+                            'speakers': row.get('speakers', 'none')}
+                    if 'device' in self.settings:
+                        opts['device'] = self.settings['device']
+                    size = p.stat().st_size
+                    rs.create_item(p, origin='auto', **opts)
+                    with self.watch_lock:
+                        for r in self.watch:
+                            if r['path'] == row['path']:
+                                r.setdefault('seen', []).append([p.name.lower(), size])
+                        rs.save_watch(self.watch)
+                    self.watch_sizes.pop(str(p), None)
+                    added += 1
+                    self.toast.emit(f'Новая запись из папки: {rs.clean_title(p.name)}')
+            if added:
+                rs.ensure_worker()
+                self.changed.emit()
+        except Exception as e:
+            self.toast.emit(f'Не удалось взять запись из папки: {e}')
+        finally:
+            self.watch_running = False
+
     # ---------- item actions ----------
     def _item(self, iid):
         return rs.Item(rs.STORE / iid)
@@ -279,17 +364,32 @@ class Api(QtCore.QObject):
 
     @pyqtSlot(str, str)
     def retry(self, iid, js=''):
-        """Again, with the same settings or, from the "Расшифровать заново" window, with new ones."""
-        it = self._item(iid)
+        """Again, with the same settings or, from the window, with new ones. A running one is stopped first."""
+        opts = {}
         if js:
             d = json.loads(js)
             self.remember(d)
-            it.meta.update(item_options(self.settings, bool(d.get('split'))))
+            opts = item_options(self.settings, bool(d.get('split')))
+        if self._item(iid).status == 'running':
+            threading.Thread(target=self._restart, args=(iid, opts), daemon=True).start()
+            return
+        self._requeue(iid, opts)
+
+    def _requeue(self, iid, opts):
+        it = self._item(iid)
+        it.meta.update(opts)
         it.meta.update(status='queued', error='', attempts=0)
         it.meta.pop('interrupted', None)
         it.save()
         rs.ensure_worker()
         self.changed.emit()
+
+    def _restart(self, iid, opts):
+        rs.request_cancel(iid)  # waits up to 20 s, so not on the window's thread
+        if self._item(iid).status == 'running':
+            self.toast.emit('Не удалось остановить расшифровку, попробуйте ещё раз')
+            return
+        self._requeue(iid, opts)
 
     @pyqtSlot(str)
     def remove(self, iid):
@@ -316,6 +416,7 @@ class Api(QtCore.QObject):
     def tick(self):
         # the engine runs in its own process (rs.run_worker); the window only makes sure
         # someone is working on the queue and shows what is going on
+        self.watch_tick()
         rs.ensure_worker()
         its = rs.items()
         sig = tuple((i.id, i.title, i.status) for i in its) + tuple(p.name for p in rs.new_in_downloads()[:30])

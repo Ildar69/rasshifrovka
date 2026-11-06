@@ -85,6 +85,14 @@ main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .inbox .hint { margin: 0 12px 8px; color: var(--muted); }
 .file { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; }
 .file:hover { background: var(--surface2); }
+.wrow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 10px 12px; border-radius: 12px; }
+.wrow:hover { background: var(--surface2); }
+.wrow .wname { flex: 1 1 240px; min-width: 0; }
+.wrow .wname b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.wrow .wname span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wrow label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.wrow select { background: var(--surface2); color: inherit; border: 1px solid var(--line); border-radius: 9px; padding: 6px 8px; font: inherit; }
+.inbox .watch-foot { margin: 8px 12px 10px; }
 .inbox-bar { display: flex; align-items: center; gap: 12px; margin: 0 12px 8px; }
 .inbox-bar label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .inbox-bar .btn { margin-left: auto; }
@@ -200,6 +208,12 @@ main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
         <b>Перетащите аудио сюда</b>
         <span class="muted">голосовое WhatsApp, запись встречи, mp3, m4a, ogg, wav</span>
         <button class="btn primary" id="pick">Выбрать файл</button>
+      </div>
+      <div class="card inbox">
+        <h3>Папки с автоматической расшифровкой</h3>
+        <p class="hint">Новая запись в такой папке сама встаёт в очередь с этими настройками. Файлы, которые там уже есть, не трогаются. Работает, пока открыта программа.</p>
+        <div id="watch"></div>
+        <div class="watch-foot"><button class="btn" id="watch-add">Добавить папку</button></div>
       </div>
       <div class="card inbox">
         <h3>Голосовые в Загрузках</h3>
@@ -350,7 +364,7 @@ function askAdd(files, retryId) {
   D = {files, retryId: retryId || null, split: false, model: s.model, language: s.language, speakers: s.speakers, device: s.device || 'auto'};
   if (retryId && cur) Object.assign(D, {split: cur.split, model: cur.model || D.model, language: cur.language || D.language,
                                         speakers: cur.split ? cur.speaker_count : D.speakers});
-  $('#dlg-title').textContent = retryId ? 'Расшифровать заново' : files.length === 1 ? 'Как расшифровать' : `Как расшифровать ${files.length} записи`;
+  $('#dlg-title').textContent = retryId ? (cur && cur.status === 'running' ? 'Изменить параметры: начнётся заново' : 'Расшифровать заново') : files.length === 1 ? 'Как расшифровать' : `Как расшифровать ${files.length} записи`;
   const shown = files.slice(0, 5).map(f => `<div><span>${esc(f.name)}</span><span>${fmt(f.duration)}</span></div>`).join('');
   $('#dlg-files').innerHTML = shown + (files.length > 5 ? `<div><span>и ещё ${files.length - 5}</span></div>` : '');
   renderDlg(); $('#dlg').hidden = false; $('#dlg-go').focus();
@@ -389,6 +403,21 @@ $('#dlg-go').addEventListener('click', async () => {
   const id = await call('addFiles', JSON.stringify({paths, ...opts}));
   toast(paths.length > 1 ? `Поставлено в очередь: ${paths.length}` : 'Поставлено в очередь'); await refresh(); if (id) openItem(id);
 });
+let watchSig = '';
+function renderWatch() {
+  const rows = S.watch || [], o = S.options, sig = JSON.stringify([rows, o.models, o.langs, o.speakers]);
+  if (sig === watchSig) return;  // an open list must not close on every refresh
+  watchSig = sig;
+  const sel = (key, list, v) => `<select data-w="${key}">${list.map(([x, n]) => `<option value="${esc(x)}"${x === v ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
+  const speakers = [['none', 'Без разделения голосов'], ...o.speakers];
+  $('#watch').innerHTML = rows.length ? rows.map(r => `<div class="wrow" data-path="${esc(r.path)}"><label><input type="checkbox" data-w="auto"${r.auto ? ' checked' : ''}> Авторасшифровка</label>`
+    + `<span class="wname"><b title="${esc(r.path)}">${esc(r.name)}</b><span class="muted" title="${esc(r.path)}">${r.exists ? esc(r.path) : 'Папка недоступна: ' + esc(r.path)}</span></span>`
+    + sel('model', o.models, r.model) + sel('language', o.langs, r.language) + sel('speakers', speakers, r.speakers)
+    + `<button class="btn quiet" data-w-del>Убрать</button></div>`).join('') : '<p class="hint">Папка пока не выбрана.</p>';
+}
+$('#watch-add').addEventListener('click', () => call('watchAdd'));
+$('#watch').addEventListener('change', e => { const c = e.target.closest('[data-w]'); if (!c) return; const key = c.dataset.w; call('watchSet', JSON.stringify({path: c.closest('.wrow').dataset.path, [key]: key === 'auto' ? c.checked : c.value})); });
+$('#watch').addEventListener('click', e => { if (e.target.closest('[data-w-del]')) call('watchRemove', e.target.closest('.wrow').dataset.path); });
 const inboxSel = new Set();
 function renderInbox() {
   const d = S.downloads;
@@ -468,7 +497,7 @@ function setAudio() {
 function renderItem(full) {
   const i = cur;
   if (document.activeElement !== $('#it-title')) $('#it-title').textContent = i.title;
-  $('#it-meta').innerHTML = [i.created_text, fmt(i.duration), i.model_name, i.lang_name, i.split ? 'по голосам' : '', i.took ? 'готово за ' + fmt(i.took) : '', i.status === 'queued' ? '' : i.device_name, i.origin === 'agent' ? 'добавил агент' : '']
+  $('#it-meta').innerHTML = [i.created_text, fmt(i.duration), i.model_name, i.lang_name, i.split ? 'по голосам' : '', i.took ? 'готово за ' + fmt(i.took) : '', i.status === 'queued' ? '' : i.device_name, i.origin === 'agent' ? 'добавил агент' : i.origin === 'auto' ? 'из папки' : '']
     .filter(Boolean).map(esc).map(x => `<span>${x}</span>`).join('');
   const st = $('#it-status');
   st.hidden = i.status === 'done';
@@ -477,7 +506,8 @@ function renderItem(full) {
     const last = i.paragraphs.length ? i.paragraphs[i.paragraphs.length - 1] : null;
     st.innerHTML = `<b>${esc(i.stage || 'Расшифровывается')} · ${Math.round(i.progress*100)}%</b><div class="bar"><i style="width:${Math.round(i.progress*100)}%"></i></div>`
       + `<span class="muted num">Идёт ${fmt(i.elapsed)}, ${i.left == null ? 'сколько осталось — станет ясно, когда пойдёт текст' : 'осталось примерно ' + fmt(i.left)}. Окно можно закрыть: расшифровка идёт отдельно от него и не прервётся.</span>`
-      + (last ? `<span class="muted">Дошла до ${fmt(last[1]/1000)} записи — текст ниже появляется по ходу.</span>` : '');
+      + (last ? `<span class="muted">Дошла до ${fmt(last[1]/1000)} записи — текст ниже появляется по ходу.</span>` : '')
+      + `<div><button class="btn" id="st-params">Изменить параметры</button></div>`;
   }
   if (i.status === 'error') st.innerHTML = `<b style="color:var(--err)">Не получилось</b><span class="muted">${esc(i.error || '')}</span><div><button class="btn primary" id="st-retry">Расшифровать заново</button></div>`;
   $('#it-copy').disabled = i.status !== 'done';
@@ -520,7 +550,7 @@ $('#m-edit').addEventListener('click', () => call('openEditor', curId));
 $('#m-folder').addEventListener('click', () => call('openFolder', curId));
 const askRetry = () => cur && askAdd([{path: '', name: cur.title, duration: cur.duration}], curId);
 $('#m-retry').addEventListener('click', askRetry);
-$('#it-status').addEventListener('click', e => { if (e.target.id === 'st-retry') askRetry(); });
+$('#it-status').addEventListener('click', e => { if (e.target.id === 'st-retry' || e.target.id === 'st-params') askRetry(); });
 let delArmed = false;
 $('#m-del').addEventListener('click', async e => {
   e.stopPropagation();
@@ -559,7 +589,7 @@ function lastEnd(i) { const p = (i && i.paragraphs) || []; return p.length ? p.l
 async function refresh() {
   S = await call('state');
   document.documentElement.dataset.theme = S.theme;
-  renderList(); renderInbox();
+  renderList(); renderInbox(); renderWatch();
   if (view === 'item' && curId) {
     const fresh = await call('item', curId);
     if (!fresh) { show('new'); return; }
