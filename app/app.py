@@ -293,7 +293,7 @@ class Api(QtCore.QObject):
 
     def watch_tick(self):
         now = time.time()
-        if self.watch_running or now - self.watch_last < 5 or not any(r.get('auto') for r in self.watch):
+        if self.watch_running or now - self.watch_last < 2 or not any(r.get('auto') for r in self.watch):
             return
         self.watch_last = now
         self.watch_running = True

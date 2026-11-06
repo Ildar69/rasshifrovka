@@ -325,10 +325,9 @@ def clean_title(name):
 
 
 # Folders whose new recordings are queued by themselves. A file counts as new if it was not there
-# when the folder was added or switched on, and it is taken once its size stopped changing: a cloud
-# or a messenger may still be writing it.
+# when the folder was added or switched on, and it is taken as soon as it is complete.
 WATCH_FILE = STORE / 'watch.json'
-WATCH_SETTLE_SEC = 15
+WATCH_GIVE_UP_SEC = 60
 
 
 def load_watch():
@@ -366,8 +365,26 @@ def watch_snapshot(folder):
     return out
 
 
+def file_busy(path):
+    """Someone still holds the file open: asks Windows for it with no sharing allowed."""
+    if os.name != 'nt':
+        return False
+    import ctypes
+    from ctypes import wintypes
+    create = ctypes.windll.kernel32.CreateFileW
+    create.restype = wintypes.HANDLE
+    create.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD,
+                       wintypes.DWORD, wintypes.HANDLE]
+    h = create(str(path), 0x80000000, 0, None, 3, 0x80, None)  # GENERIC_READ, no sharing, OPEN_EXISTING
+    if h == wintypes.HANDLE(-1).value:
+        return True
+    ctypes.windll.kernel32.CloseHandle(wintypes.HANDLE(h))
+    return False
+
+
 def watch_ready(row, sizes, now=None):
-    """New files of this folder whose size has settled. sizes: {path: (size, since)}, kept by the caller."""
+    """New files of this folder that can be taken right now: nobody is writing them, the size did not
+    change since the last look and the sound opens. sizes: {path: (size, first seen)}, kept by the caller."""
     now = now or time.time()
     seen = {tuple(x) for x in row.get('seen', [])}
     ready = []
@@ -385,9 +402,15 @@ def watch_ready(row, sizes, now=None):
             sizes.pop(key, None)
             continue
         was = sizes.get(key)
-        if was is None or was[0] != size:
+        if was is not None and was[0] != size:
             sizes[key] = (size, now)
-        elif now - was[1] >= WATCH_SETTLE_SEC:
+            continue
+        if was is None:
+            sizes[key] = was = (size, now)
+        if file_busy(p):
+            continue
+        # a broken file never opens: after a while it goes to the queue anyway and shows its error there
+        if audio_duration(p) > 0 or now - was[1] >= WATCH_GIVE_UP_SEC:
             ready.append(p)
     return ready
 
