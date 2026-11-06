@@ -85,6 +85,11 @@ main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .inbox .hint { margin: 0 12px 8px; color: var(--muted); }
 .file { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; }
 .file:hover { background: var(--surface2); }
+.inbox-bar { display: flex; align-items: center; gap: 12px; margin: 0 12px 8px; }
+.inbox-bar label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.inbox-bar .btn { margin-left: auto; }
+.inbox-bar .btn:disabled { opacity: .5; cursor: default; }
+.inbox input[type=checkbox] { width: 18px; height: 18px; flex: none; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .file .fi { width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex: none; }
 .file .fn { flex: 1; min-width: 0; }
 .file .fn b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
@@ -199,6 +204,10 @@ main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
       <div class="card inbox">
         <h3>Голосовые в Загрузках</h3>
         <p class="hint" id="inbox-hint"></p>
+        <div class="inbox-bar" id="inbox-bar" hidden>
+          <label><input type="checkbox" id="inbox-all"> Выбрать все</label>
+          <button class="btn primary" id="inbox-go">Расшифровать выбранные</button>
+        </div>
         <div id="inbox"></div>
       </div>
     </div>
@@ -380,11 +389,25 @@ $('#dlg-go').addEventListener('click', async () => {
   const id = await call('addFiles', JSON.stringify({paths, ...opts}));
   toast(paths.length > 1 ? `Поставлено в очередь: ${paths.length}` : 'Поставлено в очередь'); await refresh(); if (id) openItem(id);
 });
+const inboxSel = new Set();
 function renderInbox() {
   const d = S.downloads;
+  for (const p of [...inboxSel]) if (!d.some(f => f.path === p)) inboxSel.delete(p);
   $('#inbox-hint').textContent = d.length ? 'Записи за последние 14 дней, которых ещё нет в истории.' : 'Новых голосовых нет — всё уже в истории.';
-  $('#inbox').innerHTML = d.map(f => `<div class="file"><span class="fi">♪</span><span class="fn"><b title="${esc(f.name)}">${esc(f.name)}</b><span class="muted num">${esc(f.when)} · ${fmt(f.duration)}</span></span><button class="btn" data-path="${esc(f.path)}">Расшифровать</button></div>`).join('');
+  $('#inbox').innerHTML = d.map(f => `<div class="file"><input type="checkbox" data-sel="${esc(f.path)}" aria-label="Выбрать ${esc(f.name)}"${inboxSel.has(f.path) ? ' checked' : ''}><span class="fi">♪</span><span class="fn"><b title="${esc(f.name)}">${esc(f.name)}</b><span class="muted num">${esc(f.when)} · ${fmt(f.duration)}</span></span><button class="btn" data-path="${esc(f.path)}">Расшифровать</button></div>`).join('');
+  renderInboxBar();
 }
+function renderInboxBar() {
+  const n = inboxSel.size, total = S.downloads.length, all = $('#inbox-all'), go = $('#inbox-go');
+  $('#inbox-bar').hidden = total < 2;
+  all.checked = n > 0 && n === total;
+  all.indeterminate = n > 0 && n < total;
+  go.disabled = !n;
+  go.textContent = n ? `Расшифровать выбранные: ${n}` : 'Расшифровать выбранные';
+}
+$('#inbox').addEventListener('change', e => { const c = e.target.closest('input[data-sel]'); if (!c) return; if (c.checked) inboxSel.add(c.dataset.sel); else inboxSel.delete(c.dataset.sel); renderInboxBar(); });
+$('#inbox-all').addEventListener('change', e => { inboxSel.clear(); if (e.target.checked) for (const f of S.downloads) inboxSel.add(f.path); renderInbox(); });
+$('#inbox-go').addEventListener('click', () => { const files = S.downloads.filter(f => inboxSel.has(f.path)); if (files.length) askAdd(files); });
 $('#inbox').addEventListener('click', e => { const b = e.target.closest('button[data-path]'); if (!b) return; const f = S.downloads.find(x => x.path === b.dataset.path); if (f) askAdd([f]); });
 $('#pick').addEventListener('click', async () => askAdd(await call('pickFiles')));
 const drop = $('#drop');
